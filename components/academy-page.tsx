@@ -7,6 +7,7 @@ import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   ClipboardCheck,
   Clock,
   CreditCard,
@@ -55,6 +56,13 @@ const stats = [
   { label: 'Compliance courses', value: '24+' },
   { label: 'Templates and examples', value: '120+' },
   { label: 'Expert-led lessons', value: '80h' },
+];
+
+const mainSiteMenu = [
+  { label: 'Services', href: 'https://easymedicaldevice.com/services/' },
+  { label: 'Expertise', href: 'https://easymedicaldevice.com/expertise/' },
+  { label: 'Learn', href: 'https://easymedicaldevice.com/blog/' },
+  { label: 'About', href: 'https://easymedicaldevice.com/about/' },
 ];
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -134,6 +142,64 @@ export function AcademyPage({
 
   return (
     <main className="min-h-screen bg-[#fbfbfe] text-[#191625]">
+      <header className="border-b border-[#f0edf8] bg-[#fbfbfe]">
+        <div className="mx-auto grid min-h-[92px] max-w-[1380px] grid-cols-[1fr_auto] items-center gap-4 px-4 sm:px-6 lg:min-h-[112px] lg:grid-cols-[150px_1fr_260px] lg:px-8">
+          <a
+            href="https://easymedicaldevice.com/"
+            aria-label="Easy Medical Device home"
+            className="flex w-fit items-center"
+          >
+            <img
+              src="/easy-medical-device-logo.png"
+              alt="Easy Medical Device"
+              className="size-[76px] object-contain lg:size-[92px]"
+            />
+          </a>
+
+          <nav
+            aria-label="Easy Medical Device main menu"
+            className="hidden items-center gap-9 justify-self-start text-[17px] font-medium text-black lg:flex"
+          >
+            {mainSiteMenu.map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                className="inline-flex h-11 items-center gap-2 rounded-lg px-1 transition hover:text-[#6b34e9] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#6b34e9]/20"
+              >
+                {item.label}
+                <ChevronDown
+                  className="size-4 stroke-[2.2]"
+                  aria-hidden="true"
+                />
+              </a>
+            ))}
+          </nav>
+
+          <a
+            href="https://easymedicaldevice.com/contact/"
+            className="inline-flex h-[52px] min-w-[148px] items-center justify-center rounded-lg bg-[#eee8fb] px-6 text-base font-medium text-[#6b34e9] transition hover:bg-[#e6dcfb] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#6b34e9]/20 sm:min-w-[190px] lg:h-[54px] lg:min-w-[260px]"
+          >
+            Let&apos;s Talk
+          </a>
+
+          <nav
+            aria-label="Easy Medical Device mobile main menu"
+            className="col-span-2 flex items-center gap-4 overflow-x-auto pb-3 text-sm font-medium text-black lg:hidden"
+          >
+            {mainSiteMenu.map((item) => (
+              <a
+                key={item.label}
+                href={item.href}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-1 py-2"
+              >
+                {item.label}
+                <ChevronDown className="size-3.5" aria-hidden="true" />
+              </a>
+            ))}
+          </nav>
+        </div>
+      </header>
+
       <section className="border-b border-[#e8e3f7] bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/academy" className="flex items-center gap-3">
