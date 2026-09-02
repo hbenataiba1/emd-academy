@@ -200,18 +200,16 @@ export function AcademyPage({
         </div>
       </header>
 
-      <section className="border-b border-[#e8e3f7] bg-white">
+      <section className="border-b border-[#f0edf8] bg-[#fbfbfe]">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <Link href="/academy" className="flex items-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-full border border-[#8f68ff]/25 bg-white shadow-sm">
-              <span className="text-[11px] font-bold text-[#7c3aed]">EASY</span>
-            </span>
-            <span className="hidden text-sm font-semibold text-[#201b31] sm:inline">
-              Easy Medical Device Academy
-            </span>
+          <Link
+            href="/academy"
+            className="text-sm font-semibold text-black transition hover:text-[#6b34e9] sm:text-base"
+          >
+            easy medical device academy
           </Link>
 
-          <nav className="hidden items-center gap-6 text-sm font-medium text-[#514b63] md:flex">
+          <nav className="hidden items-center gap-6 text-sm font-medium text-black md:flex">
             <a href="#courses" className="hover:text-[#7c3aed]">
               Courses
             </a>
@@ -229,13 +227,13 @@ export function AcademyPage({
           <div className="flex items-center gap-2">
             <a
               href="#courses"
-              className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-[#5e5870] hover:bg-[#f4f1ff] sm:inline-flex"
+              className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-black hover:bg-[#eee8fb] hover:text-[#6b34e9] sm:inline-flex"
             >
               Log in
             </a>
             <a
               href="#courses"
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#7c3aed] px-3 text-sm font-semibold text-white shadow-sm hover:bg-[#6d31dc]"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#eee8fb] px-3 text-sm font-semibold text-[#6b34e9] shadow-sm transition hover:bg-[#e6dcfb]"
             >
               Start learning
               <ArrowRight className="size-4" aria-hidden="true" />
