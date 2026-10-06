@@ -1227,6 +1227,8 @@ export function CoursePlayer({
                           [&_li]:pl-1
                           [&_strong]:font-black [&_strong]:text-white
                           [&_hr]:my-5 [&_hr]:border-white/10
+                          [&_img]:my-4 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-xl
+                          [&_iframe]:max-w-full
                           [&_mark]:rounded [&_mark]:bg-amber-400/20 [&_mark]:px-1 [&_mark]:text-amber-200
                           [&_a]:font-bold [&_a]:text-[#b58dfb] [&_a]:underline"
                         dangerouslySetInnerHTML={{ __html: activeLesson.description }}
