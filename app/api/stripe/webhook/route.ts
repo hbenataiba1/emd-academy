@@ -1,4 +1,9 @@
-import { academyRestFetch, cleanEnv, json } from '@/lib/academy-auth';
+import {
+  academyRestFetch,
+  cleanEnv,
+  json,
+  saveAcademyEnrollment,
+} from '@/lib/academy-auth';
 
 type StripeCheckoutSession = {
   id: string;
@@ -60,22 +65,16 @@ async function markCheckoutComplete(session: StripeCheckoutSession) {
   const amountCents = session.amount_total || 0;
   const currency = session.currency || 'usd';
 
-  await academyRestFetch('enrollments?on_conflict=user_id,course_id', {
-    method: 'POST',
-    body: JSON.stringify({
-      user_id: userId,
-      learner_email: learnerEmail,
-      course_id: courseId,
-      amount_cents: amountCents,
-      currency,
-      stripe_checkout_session_id: session.id,
-      stripe_customer_id:
-        typeof session.customer === 'string' ? session.customer : null,
-      status: 'active',
-      updated_at: now,
-    }),
-    prefer: 'resolution=merge-duplicates,return=minimal',
-    useServiceRole: true,
+  await saveAcademyEnrollment({
+    userId,
+    learnerEmail,
+    courseId,
+    amountCents,
+    currency,
+    stripeCheckoutSessionId: session.id,
+    stripeCustomerId:
+      typeof session.customer === 'string' ? session.customer : null,
+    status: 'active',
   });
 
   await academyRestFetch('purchases?on_conflict=stripe_checkout_session_id', {

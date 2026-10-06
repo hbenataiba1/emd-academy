@@ -6,7 +6,9 @@ import { ArrowRight, LockKeyhole, Mail, UserRound } from 'lucide-react';
 
 import { AcademyFooter, AcademyHeader } from '@/components/academy-shell';
 import {
+  completeOAuthSignIn,
   getStoredAcademySession,
+  signInWithGoogle,
   signInAcademyUser,
   signUpAcademyUser,
 } from '@/lib/academy-session';
@@ -34,10 +36,23 @@ export function AcademyAuthPage({ mode }: AcademyAuthPageProps) {
   }, []);
 
   useEffect(() => {
-    if (getStoredAcademySession()) {
-      window.location.assign(nextPath);
-    }
+    completeOAuthSignIn().then((result) => {
+      if (result?.ok) {
+        window.location.assign(result.next);
+      } else if (result) {
+        setMessage(result.message);
+      } else if (getStoredAcademySession()) {
+        window.location.assign(nextPath);
+      }
+    });
   }, [nextPath]);
+
+  function onGoogle() {
+    const result = signInWithGoogle(nextPath);
+    if (result) {
+      setMessage(result.message);
+    }
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -105,6 +120,26 @@ export function AcademyAuthPage({ mode }: AcademyAuthPageProps) {
             </div>
           </div>
 
+          <button
+            type="button"
+            onClick={onGoogle}
+            className="inline-flex h-11 w-full items-center justify-center gap-3 rounded-lg border border-[#dcd5ee] bg-white px-5 text-sm font-bold text-[#302945] transition hover:bg-[#f7f4ff]"
+          >
+            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
+              <path fill="#4285F4" d="M23.5 12.27c0-.82-.07-1.6-.21-2.36H12v4.47h6.45a5.52 5.52 0 0 1-2.4 3.62v3h3.88c2.27-2.09 3.57-5.17 3.57-8.73z" />
+              <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.07.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.1A12 12 0 0 0 12 24z" />
+              <path fill="#FBBC05" d="M5.27 14.28a7.2 7.2 0 0 1 0-4.56v-3.1H1.27a12 12 0 0 0 0 10.76l4-3.1z" />
+              <path fill="#EA4335" d="M12 4.76c1.76 0 3.35.61 4.6 1.8l3.44-3.44C17.96 1.19 15.24 0 12 0A12 12 0 0 0 1.27 6.62l4 3.1C6.22 6.87 8.87 4.76 12 4.76z" />
+            </svg>
+            Continue with Google
+          </button>
+
+          <div className="my-5 flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-[#8b849a]">
+            <span className="h-px flex-1 bg-[#e4ddf4]" />
+            or
+            <span className="h-px flex-1 bg-[#e4ddf4]" />
+          </div>
+
           <form className="space-y-4" onSubmit={onSubmit}>
             {isSignup ? (
               <label className="block">
@@ -140,8 +175,16 @@ export function AcademyAuthPage({ mode }: AcademyAuthPageProps) {
             </label>
 
             <label className="block">
-              <span className="text-sm font-bold text-[#302945]">
-                Password
+              <span className="flex items-center justify-between">
+                <span className="text-sm font-bold text-[#302945]">Password</span>
+                {!isSignup ? (
+                  <Link
+                    href="/academy/forgot-password"
+                    className="text-xs font-bold text-[#7c3aed] hover:text-[#6d31dc]"
+                  >
+                    Forgot password?
+                  </Link>
+                ) : null}
               </span>
               <input
                 type="password"

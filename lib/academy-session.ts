@@ -200,6 +200,180 @@ export async function signUpAcademyUser({
   });
 }
 
+const OAUTH_NEXT_KEY = 'easy_medical_device_academy_oauth_next';
+
+export function signInWithGoogle(
+  nextPath: string,
+): { ok: false; message: string } | void {
+  const config = getPublicSupabaseConfig();
+  if (!config) {
+    return { ok: false, message: 'Academy Supabase is not configured yet.' };
+  }
+
+  try {
+    window.sessionStorage.setItem(OAUTH_NEXT_KEY, nextPath);
+  } catch {
+    // ignore storage failures; user lands on the default page
+  }
+
+  const redirectTo = `${window.location.origin}/academy/login`;
+  window.location.assign(
+    `${config.url}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`,
+  );
+}
+
+/**
+ * Completes a Supabase OAuth redirect (tokens arrive in the URL hash).
+ * Returns the path to continue to, an error message, or null if no OAuth
+ * response is present.
+ */
+export async function completeOAuthSignIn(): Promise<
+  { ok: true; next: string } | { ok: false; message: string } | null
+> {
+  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const accessToken = params.get('access_token');
+  const errorDescription = params.get('error_description');
+
+  if (!accessToken && !errorDescription) {
+    return null;
+  }
+
+  window.history.replaceState(
+    null,
+    '',
+    window.location.pathname + window.location.search,
+  );
+
+  if (!accessToken) {
+    return { ok: false, message: errorDescription || 'Google sign-in failed.' };
+  }
+
+  const config = getPublicSupabaseConfig();
+  if (!config) {
+    return { ok: false, message: 'Academy Supabase is not configured yet.' };
+  }
+
+  try {
+    const response = await fetch(`${config.url}/auth/v1/user`, {
+      headers: {
+        apikey: config.anonKey,
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+    if (!response.ok) {
+      return { ok: false, message: 'Google sign-in failed. Please try again.' };
+    }
+
+    const expiresIn = Number(params.get('expires_in'));
+    saveAcademySession({
+      access_token: accessToken,
+      refresh_token: params.get('refresh_token') || undefined,
+      expires_at: expiresIn
+        ? Math.floor(Date.now() / 1000) + expiresIn
+        : undefined,
+      user: (await response.json()) as AcademySession['user'],
+    });
+
+    let next = '/academy/my-learning';
+    try {
+      const stored = window.sessionStorage.getItem(OAUTH_NEXT_KEY);
+      window.sessionStorage.removeItem(OAUTH_NEXT_KEY);
+      if (stored?.startsWith('/academy')) next = stored;
+    } catch {
+      // ignore
+    }
+    return { ok: true, next };
+  } catch {
+    return { ok: false, message: 'Network error. Please try again.' };
+  }
+}
+
+export async function requestAcademyPasswordReset(
+  email: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const config = getPublicSupabaseConfig();
+  if (!config) {
+    return { ok: false, message: 'Academy Supabase is not configured yet.' };
+  }
+
+  try {
+    const redirectTo = `${window.location.origin}/academy/reset-password`;
+    const response = await fetch(
+      `${config.url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`,
+      {
+        method: 'POST',
+        headers: { apikey: config.anonKey, 'content-type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      },
+    );
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as {
+        msg?: string;
+        error_description?: string;
+        message?: string;
+      };
+      return {
+        ok: false,
+        message:
+          payload.error_description ||
+          payload.msg ||
+          payload.message ||
+          'We could not send the reset email. Please try again.',
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'Network error. Please try again.' };
+  }
+}
+
+export async function resetAcademyPassword(
+  accessToken: string,
+  password: string,
+): Promise<{ ok: boolean; message?: string }> {
+  const config = getPublicSupabaseConfig();
+  if (!config) {
+    return { ok: false, message: 'Academy Supabase is not configured yet.' };
+  }
+  if (password.trim().length < 6) {
+    return { ok: false, message: 'Password must be at least 6 characters.' };
+  }
+
+  try {
+    const response = await fetch(`${config.url}/auth/v1/user`, {
+      method: 'PUT',
+      headers: {
+        apikey: config.anonKey,
+        authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ password: password.trim() }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as {
+        msg?: string;
+        error_description?: string;
+        message?: string;
+      };
+      return {
+        ok: false,
+        message:
+          payload.error_description ||
+          payload.msg ||
+          payload.message ||
+          'This reset link has expired. Request a new one.',
+      };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'Network error. Please try again.' };
+  }
+}
+
 async function authRequest(
   path: string,
   body: Record<string, unknown>,

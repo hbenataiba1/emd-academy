@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   FileText,
   HelpCircle,
+  LockKeyhole,
   Maximize,
   Maximize2,
   MessageCircle,
@@ -56,15 +57,29 @@ import {
   getCurriculumForCourse,
 } from '@/lib/curriculum-data';
 import {
+  getAcademyDisplayName,
   getAcademyAuthHeader,
   getStoredAcademySession,
   type AcademySession,
 } from '@/lib/academy-session';
+import {
+  getStoredCourseProgress,
+  markCourseStarted,
+  saveStoredLessonProgress,
+} from '@/lib/academy-learning-state';
+import {
+  buildCertificateSvg,
+  downloadCertificatePdf,
+  formatCertificateDate,
+  openLinkedInCertificate as shareCertificateOnLinkedIn,
+} from '@/lib/academy-certificate';
+import { PlayerSkeleton } from '@/components/page-skeletons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 type CoursePlayerProps = {
   courseId?: string;
+  freeCourse?: boolean;
 };
 
 type NoteItem = {
@@ -91,6 +106,96 @@ type QAItem = {
   }[];
 };
 
+type QuizOption = {
+  id: string;
+  text: string;
+};
+
+type QuizQuestion = {
+  _key?: string;
+  question: string;
+  options: QuizOption[];
+  correctOptionId?: string;
+  correctOptionIds?: string[];
+  explanation?: string;
+};
+
+type QuizMeta = {
+  passingScore: number;
+  certificateTitle: string;
+  certificateEnabled: boolean;
+};
+
+type IssuedCertificate = {
+  certificate_number?: string;
+  issued_at?: string;
+};
+
+function parseQuizMeta(description?: string): QuizMeta {
+  const fallback: QuizMeta = {
+    passingScore: 80,
+    certificateTitle: 'Certificate of Completion',
+    certificateEnabled: true,
+  };
+
+  if (!description) return fallback;
+
+  try {
+    const parsed = JSON.parse(description) as Partial<QuizMeta>;
+    return {
+      passingScore:
+        typeof parsed.passingScore === 'number'
+          ? parsed.passingScore
+          : fallback.passingScore,
+      certificateTitle:
+        typeof parsed.certificateTitle === 'string' && parsed.certificateTitle.trim()
+          ? parsed.certificateTitle
+          : fallback.certificateTitle,
+      certificateEnabled: parsed.certificateEnabled !== false,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function parseQuizQuestions(lesson?: CourseLesson): QuizQuestion[] {
+  return (lesson?.resources || [])
+    .filter((resource) => resource.type === 'quiz_question' && resource.url)
+    .map((resource) => {
+      try {
+        return JSON.parse(resource.url || '') as QuizQuestion;
+      } catch {
+        return null;
+      }
+    })
+    .filter((question): question is QuizQuestion =>
+      Boolean(question?.question && question.options?.length),
+    );
+}
+
+function getCorrectQuizOptionIds(question: QuizQuestion) {
+  if (question.correctOptionIds?.length) return question.correctOptionIds;
+  return question.correctOptionId ? [question.correctOptionId] : [];
+}
+
+function isQuizQuestionCorrect(question: QuizQuestion, answers: string[] = []) {
+  const correctIds = getCorrectQuizOptionIds(question).sort();
+  const selectedIds = [...answers].sort();
+
+  return (
+    correctIds.length > 0 &&
+    correctIds.length === selectedIds.length &&
+    correctIds.every((id, index) => id === selectedIds[index])
+  );
+}
+
+function formatQuizTime(totalSeconds: number) {
+  const safe = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 function getEmbedUrl(url?: string): string {
   if (!url) return '';
   if (url.includes('youtube.com/watch?v=')) {
@@ -113,7 +218,10 @@ function isEmbedUrl(url?: string): boolean {
   return lower.includes('youtube.com') || lower.includes('youtu.be') || lower.includes('vimeo.com');
 }
 
-export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlayerProps) {
+export function CoursePlayer({
+  courseId = 'eu-mdr-technical-file',
+  freeCourse = false,
+}: CoursePlayerProps) {
   const [curriculum, setCurriculum] = useState<CourseCurriculum>(() => getCurriculumForCourse(courseId));
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -135,8 +243,10 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
   const [academySession, setAcademySession] = useState<
     AcademySession | null | undefined
   >(undefined);
+  const [issuedCertificate, setIssuedCertificate] =
+    useState<IssuedCertificate | null>(null);
   const [accessState, setAccessState] = useState<
-    'checking' | 'ready' | 'blocked'
+    'checking' | 'ready' | 'blocked' | 'preview'
   >('checking');
   const [accessMessage, setAccessMessage] = useState('');
   const [checkoutPending, setCheckoutPending] = useState(false);
@@ -150,6 +260,9 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
   const allLessons = useMemo(() => {
     return curriculum.sections.flatMap((s) => s.lessons);
   }, [curriculum]);
+  const previewLessons = useMemo(() => {
+    return allLessons.filter((lesson) => lesson.previewEnabled);
+  }, [allLessons]);
 
   const [activeLessonId, setActiveLessonId] = useState<string>(() => {
     // Default to first incomplete lesson, or first lesson
@@ -160,6 +273,51 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
   const activeLesson = useMemo(() => {
     return allLessons.find((l) => l.id === activeLessonId) || allLessons[0];
   }, [allLessons, activeLessonId]);
+  const learnerName = useMemo(
+    () => getAcademyDisplayName(academySession || getStoredAcademySession()),
+    [academySession],
+  );
+  const quizMeta = useMemo(() => parseQuizMeta(activeLesson?.description), [activeLesson]);
+  const quizQuestions = useMemo(() => parseQuizQuestions(activeLesson), [activeLesson]);
+  const visibleResources = useMemo(
+    () =>
+      (activeLesson?.resources || []).filter(
+        (resource) => resource.type !== 'quiz_question',
+      ),
+    [activeLesson],
+  );
+
+  const hasFullAccess = Boolean(academySession && accessState === 'ready');
+  const isPreviewMode = accessState === 'preview';
+  const canAccessLesson = (lesson?: CourseLesson) => {
+    if (!lesson) return false;
+    return hasFullAccess || Boolean(lesson.previewEnabled);
+  };
+
+  const signInToUnlock = () => {
+    window.location.assign(
+      `/academy/login?next=${encodeURIComponent(`/academy/learn/${courseId}`)}`,
+    );
+  };
+
+  useEffect(() => {
+    const requestedLessonId =
+      typeof window === 'undefined'
+        ? null
+        : new URLSearchParams(window.location.search).get('lesson');
+    const requestedLesson = requestedLessonId
+      ? allLessons.find((lesson) => lesson.id === requestedLessonId)
+      : null;
+
+    if (requestedLesson && canAccessLesson(requestedLesson)) {
+      setActiveLessonId(requestedLesson.id);
+      return;
+    }
+
+    if (isPreviewMode && activeLesson && !activeLesson.previewEnabled && previewLessons[0]) {
+      setActiveLessonId(previewLessons[0].id);
+    }
+  }, [allLessons, activeLesson, courseId, hasFullAccess, isPreviewMode, previewLessons]);
 
   // Reset playback on lesson change
   useEffect(() => {
@@ -189,6 +347,109 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
   const [isMuted, setIsMuted] = useState(false);
   const [showCaptions, setShowCaptions] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'qa' | 'notes' | 'announcements' | 'reviews' | 'resources'>('overview');
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, string[]>>({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [currentQuizQuestionIndex, setCurrentQuizQuestionIndex] = useState(0);
+  const [quizSecondsLeft, setQuizSecondsLeft] = useState<number | null>(null);
+  const [quizAttempt, setQuizAttempt] = useState(0);
+  const submitQuizRef = useRef<() => void>(() => {});
+  const quizCorrectCount = quizQuestions.filter((question, index) =>
+    isQuizQuestionCorrect(
+      question,
+      quizAnswers[question._key || `question-${index}`] || [],
+    ),
+  ).length;
+  const answeredQuizCount = quizQuestions.filter((question, index) => {
+    const questionKey = question._key || `question-${index}`;
+    return (quizAnswers[questionKey] || []).length > 0;
+  }).length;
+  const quizScore = quizQuestions.length
+    ? Math.round((quizCorrectCount / quizQuestions.length) * 100)
+    : 0;
+  const quizPassed = quizSubmitted && quizScore >= quizMeta.passingScore;
+  const incorrectQuizQuestionNumbers = quizQuestions
+    .map((question, index) =>
+      isQuizQuestionCorrect(
+        question,
+        quizAnswers[question._key || `question-${index}`] || [],
+      )
+        ? null
+        : index + 1,
+    )
+    .filter((index): index is number => index !== null);
+  const allQuizQuestionsAnswered =
+    quizQuestions.length > 0 && answeredQuizCount === quizQuestions.length;
+  const certificateNumber =
+    issuedCertificate?.certificate_number ||
+    `EMDA-${new Date().getFullYear()}-${courseId
+      .slice(0, 4)
+      .toUpperCase()}-${(academySession?.user.id || 'ACADEMY')
+      .slice(0, 8)
+      .toUpperCase()}`;
+  const certificateIssuedDate = formatCertificateDate(issuedCertificate?.issued_at);
+  const quizCertificateReady =
+    activeLesson?.type === 'quiz' &&
+    quizMeta.certificateEnabled &&
+    (quizPassed || completedLessonIds.has(activeLesson.id));
+  const certificateSvg = useMemo(
+    () =>
+      buildCertificateSvg({
+        learnerName,
+        courseTitle: curriculum.title,
+        certificateTitle: quizMeta.certificateTitle,
+        certificateNumber,
+        issuedDate: certificateIssuedDate,
+      }),
+    [
+      learnerName,
+      curriculum.title,
+      quizMeta.certificateTitle,
+      certificateNumber,
+      certificateIssuedDate,
+    ],
+  );
+  const certificatePreviewUrl = useMemo(
+    () => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(certificateSvg)}`,
+    [certificateSvg],
+  );
+
+  useEffect(() => {
+    setQuizAnswers({});
+    setQuizSubmitted(false);
+    setCurrentQuizQuestionIndex(0);
+  }, [activeLessonId]);
+
+  // Exam countdown: starts from the lesson duration and auto-submits at 0.
+  const quizTimerActive =
+    activeLesson?.type === 'quiz' &&
+    hasFullAccess &&
+    !quizSubmitted &&
+    !quizCertificateReady &&
+    quizQuestions.length > 0;
+  const quizTimeLimitSeconds = activeLesson?.durationSeconds || 0;
+
+  useEffect(() => {
+    setQuizSecondsLeft(quizTimeLimitSeconds > 0 ? quizTimeLimitSeconds : null);
+  }, [activeLessonId, quizAttempt, quizTimeLimitSeconds]);
+
+  useEffect(() => {
+    if (!quizTimerActive || quizSecondsLeft === null) return;
+    if (quizSecondsLeft <= 0) {
+      submitQuizRef.current();
+      return;
+    }
+    const timeout = window.setTimeout(
+      () => setQuizSecondsLeft((value) => (value === null ? null : value - 1)),
+      1000,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [quizTimerActive, quizSecondsLeft]);
+
+  useEffect(() => {
+    setCurrentQuizQuestionIndex((index) =>
+      Math.min(index, Math.max(quizQuestions.length - 1, 0)),
+    );
+  }, [quizQuestions.length]);
 
   // Video element sync
   useEffect(() => {
@@ -296,12 +557,49 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
   const progressPercent = Math.round((completedCount / totalLessonsCount) * 100);
 
   useEffect(() => {
+    const storedProgress = getStoredCourseProgress(courseId);
+    if (storedProgress?.completedLessonIds?.length) {
+      const completedIds = new Set(storedProgress.completedLessonIds);
+      setCompletedLessonIds((prev) => {
+        const next = new Set(prev);
+        storedProgress.completedLessonIds.forEach((lessonId) => next.add(lessonId));
+        return next;
+      });
+      const resumeLesson =
+        allLessons.find((lesson) => lesson.id === storedProgress.lastLessonId) ||
+        allLessons.find((lesson) => !completedIds.has(lesson.id));
+      if (resumeLesson) {
+        setActiveLessonId(resumeLesson.id);
+      }
+    }
+  }, [allLessons, courseId]);
+
+  useEffect(() => {
+    const session = academySession || getStoredAcademySession();
+    if (!session) return;
+
+    markCourseStarted({
+      id: courseId,
+      title: curriculum.title,
+      instructor: curriculum.instructor,
+      category: 'Academy',
+      lessons: totalLessonsCount,
+      accent: '#7c3aed',
+    });
+  }, [academySession, courseId, curriculum.instructor, curriculum.title, totalLessonsCount]);
+
+  useEffect(() => {
     const session = getStoredAcademySession();
     setAcademySession(session);
 
     if (!session) {
-      setAccessState('blocked');
-      setAccessMessage('Sign in to start or continue this course.');
+      if (previewLessons.length > 0) {
+        setAccessState('preview');
+        setAccessMessage('Preview mode: sign in to unlock the full course and save progress.');
+      } else {
+        setAccessState('blocked');
+        setAccessMessage('Sign in to start or continue this course.');
+      }
       return;
     }
 
@@ -331,7 +629,7 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
           return;
         }
 
-        if (!enrollResponse.ok && enrollPayload.requiresPayment) {
+        if (!enrollResponse.ok && enrollPayload.requiresPayment && !freeCourse) {
           setAccessState('blocked');
           setAccessMessage(
             enrollPayload.message ||
@@ -341,6 +639,11 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
         }
 
         if (!enrollResponse.ok) {
+          if (freeCourse) {
+            setAccessState('ready');
+            return;
+          }
+
           setAccessState('blocked');
           setAccessMessage(
             enrollPayload.message || 'Course access could not be confirmed.',
@@ -355,15 +658,30 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
           progress?: Record<string, string[]>;
         };
         const savedLessons = profile.progress?.[courseId] || [];
+        const storedProgress = getStoredCourseProgress(courseId);
 
         if (!cancelled) {
-          setCompletedLessonIds(new Set(savedLessons));
+          const mergedLessons = new Set([
+            ...savedLessons,
+            ...(storedProgress?.completedLessonIds || []),
+          ]);
+          setCompletedLessonIds(mergedLessons);
+          const resumeLesson =
+            allLessons.find((lesson) => lesson.id === storedProgress?.lastLessonId) ||
+            allLessons.find((lesson) => !mergedLessons.has(lesson.id));
+          if (resumeLesson) {
+            setActiveLessonId(resumeLesson.id);
+          }
           setAccessState('ready');
         }
       } catch {
         if (!cancelled) {
-          setAccessState('blocked');
-          setAccessMessage('Course access is temporarily unavailable.');
+          if (freeCourse) {
+            setAccessState('ready');
+          } else {
+            setAccessState('blocked');
+            setAccessMessage('Course access is temporarily unavailable.');
+          }
         }
       }
     }
@@ -373,7 +691,7 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
     return () => {
       cancelled = true;
     };
-  }, [courseId]);
+  }, [courseId, freeCourse, previewLessons.length]);
 
   // Playback timer simulation
   useEffect(() => {
@@ -382,19 +700,42 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
       interval = setInterval(() => {
         setCurrentTime((prev) => {
           const max = activeLesson?.durationSeconds || 900;
+          const nextTime = prev + 1;
+          if (nextTime >= max * 0.8) {
+            markLessonCompleted(activeLesson);
+          }
           if (prev >= max) {
             setIsPlaying(false);
-            // Mark current lesson as complete
-            setCompletedLessonIds((old) => new Set(old).add(activeLesson.id));
-            persistLessonProgress(activeLesson.id, true);
+            markLessonCompleted(activeLesson);
             return 0;
           }
-          return prev + 1;
+          return nextTime;
         });
       }, 1000 / playbackSpeed);
     }
     return () => clearInterval(interval);
-  }, [isPlaying, playbackSpeed, activeLesson]);
+  }, [isPlaying, playbackSpeed, activeLesson, hasFullAccess]);
+
+  useEffect(() => {
+    if (!activeLesson?.videoUrl || !isEmbedUrl(activeLesson.videoUrl) || !hasFullAccess) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      if (document.hidden) return;
+
+      setCurrentTime((prev) => {
+        const max = activeLesson.durationSeconds || 900;
+        const nextTime = Math.min(max, prev + 1);
+        if (nextTime >= max * 0.8) {
+          markLessonCompleted(activeLesson);
+        }
+        return nextTime;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [activeLesson, hasFullAccess]);
 
   const formatSeconds = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -402,8 +743,42 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const toggleQuizAnswer = (
+    question: QuizQuestion,
+    questionKey: string,
+    optionId: string,
+  ) => {
+    if (quizSubmitted) return;
+
+    const multiple = getCorrectQuizOptionIds(question).length > 1;
+    setQuizAnswers((prev) => {
+      const current = prev[questionKey] || [];
+      return {
+        ...prev,
+        [questionKey]: multiple
+          ? current.includes(optionId)
+            ? current.filter((id) => id !== optionId)
+            : [...current, optionId]
+          : [optionId],
+      };
+    });
+  };
+
+  const submitQuiz = () => {
+    setQuizSubmitted(true);
+    if (quizQuestions.length && quizScore >= quizMeta.passingScore) {
+      markLessonCompleted(activeLesson);
+    }
+  };
+
+  submitQuizRef.current = submitQuiz;
+
   const toggleLessonCompleted = (lessonId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (!hasFullAccess) {
+      signInToUnlock();
+      return;
+    }
     setCompletedLessonIds((prev) => {
       const next = new Set(prev);
       let isCompleted = true;
@@ -418,12 +793,43 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
     });
   };
 
+  function markLessonCompleted(lesson?: CourseLesson) {
+    if (!lesson || !hasFullAccess) return;
+
+    setCompletedLessonIds((prev) => {
+      if (prev.has(lesson.id)) {
+        return prev;
+      }
+
+      const next = new Set(prev);
+      next.add(lesson.id);
+      persistLessonProgress(lesson.id, true);
+      return next;
+    });
+  }
+
   const persistLessonProgress = async (lessonId: string, completed: boolean) => {
+    const lesson = allLessons.find((item) => item.id === lessonId);
+    saveStoredLessonProgress({
+      courseId,
+      lessonId,
+      lessonTitle: lesson?.title,
+      completed,
+      totalLessons: totalLessonsCount,
+      course: {
+        id: courseId,
+        title: curriculum.title,
+        instructor: curriculum.instructor,
+        category: 'Academy',
+        accent: '#7c3aed',
+      },
+    });
+
     const session = academySession || getStoredAcademySession();
     if (!session) return;
 
     try {
-      await fetch('/api/academy/progress', {
+      const response = await fetch('/api/academy/progress', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -436,9 +842,33 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
           progressPercent: completed ? 100 : 0,
         }),
       });
+      const payload = (await response.json().catch(() => ({}))) as {
+        certificate?: IssuedCertificate | null;
+      };
+      if (payload.certificate?.certificate_number) {
+        setIssuedCertificate(payload.certificate);
+      }
     } catch {
       // The local UI stays responsive; the next page load will reconcile progress.
     }
+  };
+
+  const downloadCertificate = () => {
+    downloadCertificatePdf({
+      learnerName,
+      courseTitle: curriculum.title,
+      certificateTitle: quizMeta.certificateTitle,
+      certificateNumber,
+      issuedDate: certificateIssuedDate,
+    });
+  };
+
+  const openLinkedInCertificate = () => {
+    shareCertificateOnLinkedIn({
+      certificateTitle: quizMeta.certificateTitle,
+      certificateNumber,
+      issuedAt: issuedCertificate?.issued_at,
+    });
   };
 
   const startProtectedCheckout = async () => {
@@ -485,17 +915,21 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
 
   const handleNextLesson = () => {
     const currentIndex = allLessons.findIndex((l) => l.id === activeLessonId);
-    if (currentIndex >= 0 && currentIndex < allLessons.length - 1) {
-      setActiveLessonId(allLessons[currentIndex + 1].id);
+    const nextLesson = allLessons.slice(currentIndex + 1).find(canAccessLesson);
+    if (nextLesson) {
+      setActiveLessonId(nextLesson.id);
       setCurrentTime(0);
       setIsPlaying(true);
+    } else if (!hasFullAccess) {
+      signInToUnlock();
     }
   };
 
   const handlePrevLesson = () => {
     const currentIndex = allLessons.findIndex((l) => l.id === activeLessonId);
-    if (currentIndex > 0) {
-      setActiveLessonId(allLessons[currentIndex - 1].id);
+    const prevLesson = allLessons.slice(0, currentIndex).reverse().find(canAccessLesson);
+    if (prevLesson) {
+      setActiveLessonId(prevLesson.id);
       setCurrentTime(0);
       setIsPlaying(true);
     }
@@ -561,21 +995,11 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
 
   if (academySession === undefined || accessState === 'checking') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0e0c14] px-4 text-white">
-        <div className="max-w-md text-center">
-          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-[#7c3aed]/20 text-[#b58dfb]">
-            <PlayCircle className="size-6" />
-          </div>
-          <h1 className="text-2xl font-black">Opening your course</h1>
-          <p className="mt-2 text-sm text-[#a098b5]">
-            We are checking your academy access and loading your saved progress.
-          </p>
-        </div>
-      </div>
+      <PlayerSkeleton />
     );
   }
 
-  if (!academySession || accessState === 'blocked') {
+  if (accessState === 'blocked') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0e0c14] px-4 text-white">
         <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#171322] p-8 text-center shadow-2xl">
@@ -652,16 +1076,6 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Rating button */}
-          <button
-            type="button"
-            onClick={() => setRatingModalOpen(true)}
-            className="hidden items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-semibold text-[#d0c9e2] transition hover:bg-white/10 sm:flex"
-          >
-            <Star className="size-3.5 fill-[#f59e0b] text-[#f59e0b]" />
-            <span>Leave a rating</span>
-          </button>
-
           {/* Progress Indicator */}
           <div className="relative group">
             <button
@@ -755,7 +1169,431 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
         {/* LEFT / CENTER: VIDEO PLAYER & TABS AREA */}
         <div className="flex flex-1 flex-col overflow-y-auto">
           {/* VIDEO CANVAS / PLAYER */}
-          <div className="relative bg-black">
+          {activeLesson?.type === 'article' ? (
+            <div className="border-b border-white/10 bg-gradient-to-br from-[#1b152b] via-[#100d1a] to-[#05030a] px-5 py-2 text-white sm:px-10 sm:py-3 lg:px-16">
+              <article className="w-full">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-[#7c3aed]/20 px-3 py-1 text-xs font-black text-[#d8c6ff]">
+                      Article
+                    </span>
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-[#d8d0ea]">
+                      {activeLesson.duration}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => markLessonCompleted(activeLesson)}
+                      className="inline-flex h-8 items-center justify-center gap-2 rounded-lg bg-[#7c3aed] px-3 text-xs font-bold text-white transition hover:bg-[#6d31dc]"
+                    >
+                      <Check className="size-3.5" />
+                      Mark complete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNextLesson}
+                      className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-xs font-bold text-white transition hover:bg-white/10"
+                    >
+                      Next
+                      <ArrowRight className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <header className="mb-3 px-1">
+                  <h1 className="text-2xl font-black leading-tight tracking-tight text-white sm:text-4xl">
+                    {activeLesson.title}
+                  </h1>
+                  {activeLesson.subtitleSummary ? (
+                    <p className="mt-2 text-sm leading-6 text-[#c6bed8] sm:text-base">
+                      {activeLesson.subtitleSummary}
+                    </p>
+                  ) : null}
+                </header>
+
+                <div className="rounded-lg border border-white/10 bg-[#171322] p-3 shadow-2xl shadow-black/30 sm:p-4">
+                  {activeLesson.description ? (
+                    /<(h[1-6]|p|div|ul|ol|blockquote|strong|b|em|i|br|hr)/i.test(activeLesson.description) ? (
+                      <div
+                        className="text-[15px] leading-7 text-[#c6bed8] sm:text-base
+                          [&_h1]:mt-4 [&_h1]:mb-3 [&_h1]:border-b [&_h1]:border-white/10 [&_h1]:pb-2 [&_h1]:text-2xl [&_h1]:font-black [&_h1]:leading-tight [&_h1]:text-white
+                          [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-xl [&_h2]:font-black [&_h2]:leading-tight [&_h2]:text-white
+                          [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-black [&_h3]:text-[#b58dfb]
+                          [&_p]:mb-3 [&_p]:leading-7
+                          [&_blockquote]:my-4 [&_blockquote]:rounded-r-lg [&_blockquote]:border-l-4 [&_blockquote]:border-[#7c3aed] [&_blockquote]:bg-[#7c3aed]/10 [&_blockquote]:p-3 [&_blockquote]:font-semibold [&_blockquote]:text-white
+                          [&_ul]:my-3 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-6
+                          [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-6
+                          [&_li]:pl-1
+                          [&_strong]:font-black [&_strong]:text-white
+                          [&_hr]:my-5 [&_hr]:border-white/10
+                          [&_mark]:rounded [&_mark]:bg-amber-400/20 [&_mark]:px-1 [&_mark]:text-amber-200
+                          [&_a]:font-bold [&_a]:text-[#b58dfb] [&_a]:underline"
+                        dangerouslySetInnerHTML={{ __html: activeLesson.description }}
+                      />
+                    ) : (
+                      <p className="whitespace-pre-wrap text-[15px] leading-7 text-[#c6bed8] sm:text-base">
+                        {activeLesson.description}
+                      </p>
+                    )
+                  ) : (
+                    <p className="text-sm italic text-[#8e879f]">
+                      No article content has been added for this lesson yet.
+                    </p>
+                  )}
+                </div>
+              </article>
+            </div>
+          ) : activeLesson?.type === 'quiz' ? (
+            <div className="border-b border-white/10 bg-gradient-to-br from-[#1b152b] via-[#100d1a] to-[#05030a] px-4 py-8 text-white sm:px-6 lg:py-10">
+              <section className="mx-auto max-w-5xl">
+                <div className="rounded-xl border border-white/10 bg-[#171322] p-6 shadow-2xl shadow-black/30 sm:p-8">
+                  {quizCertificateReady ? (
+                    <div className="space-y-6">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#34d4c6]">
+                            Exam passed
+                          </p>
+                          <h1 className="mt-2 text-2xl font-black text-white sm:text-4xl">
+                            Your certificate is ready
+                          </h1>
+                          <p className="mt-2 text-sm text-[#b8b0cf]">
+                            Credential ID: {certificateNumber}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={downloadCertificate}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#34d4c6] px-4 text-sm font-black text-[#08110f] transition hover:bg-[#5ee7dc]"
+                          >
+                            <Download className="size-4" />
+                            Download PDF
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openLinkedInCertificate}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0a66c2] px-4 text-sm font-black text-white transition hover:bg-[#004182]"
+                          >
+                            <Share2 className="size-4" />
+                            Add to LinkedIn
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl bg-gradient-to-br from-[#3b0764] via-[#581c87] to-[#1e0847] p-2 shadow-2xl">
+                        <div className="overflow-hidden rounded-xl bg-white">
+                          <img
+                            src={certificatePreviewUrl}
+                            alt={`${quizMeta.certificateTitle} certificate`}
+                            className="block w-full"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-[#7c3aed]/20 px-3 py-1 text-xs font-black text-[#d8c6ff]">
+                        Certification exam
+                      </span>
+                      <span className="rounded-full bg-[#34d4c6]/15 px-3 py-1 text-xs font-black text-[#5ee7dc]">
+                        Pass {quizMeta.passingScore}%
+                      </span>
+                      {quizTimerActive && quizSecondsLeft !== null ? (
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black tabular-nums ${
+                            quizSecondsLeft <= 60
+                              ? 'bg-[#fff1f1] text-[#a53232]'
+                              : 'bg-white/10 text-[#d8d0ea]'
+                          }`}
+                        >
+                          Time left {formatQuizTime(quizSecondsLeft)}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-[#d8d0ea]">
+                          {activeLesson.duration}
+                        </span>
+                      )}
+                    </div>
+                    {quizSubmitted ? (
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-black ${
+                          quizPassed
+                            ? 'bg-[#e9fbf8] text-[#067b75]'
+                            : 'bg-[#fff1f1] text-[#a53232]'
+                        }`}
+                      >
+                        Score {quizScore}%
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+                    <div>
+                      <h1 className="text-3xl font-black leading-tight tracking-tight text-white sm:text-5xl">
+                        {activeLesson.title}
+                      </h1>
+                      <p className="mt-4 max-w-3xl text-base leading-7 text-[#c6bed8]">
+                        Complete the exam one question at a time. Each step tells you whether to choose one answer or multiple answers.
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex items-center gap-2 text-sm font-black text-white">
+                        <FileCheck2 className="size-4 text-[#b58dfb]" />
+                        Exam summary
+                      </div>
+                      <div className="mt-4 space-y-3 text-sm text-[#c6bed8]">
+                        <div className="flex justify-between gap-3">
+                          <span>Questions</span>
+                          <strong className="text-white">{quizQuestions.length}</strong>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span>Passing score</span>
+                          <strong className="text-white">{quizMeta.passingScore}%</strong>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span>Certificate</span>
+                          <strong className="text-white">
+                            {quizMeta.certificateEnabled ? 'Enabled' : 'Disabled'}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {quizQuestions.length > 0 ? (
+                    (() => {
+                      const quizStepIndex = Math.min(
+                        currentQuizQuestionIndex,
+                        quizQuestions.length - 1,
+                      );
+                      const question = quizQuestions[quizStepIndex];
+                      const questionKey =
+                        question._key || `question-${quizStepIndex}`;
+                      const selectedIds = quizAnswers[questionKey] || [];
+                      const correctIds = getCorrectQuizOptionIds(question);
+                      const multiple = correctIds.length > 1;
+                      const correct = isQuizQuestionCorrect(question, selectedIds);
+                      const isLastQuestion =
+                        quizStepIndex === quizQuestions.length - 1;
+                      const questionAnswered = selectedIds.length > 0;
+
+                      return (
+                        <div className="mt-8">
+                          <div className="mb-4">
+                            <div className="flex items-center justify-between gap-3 text-xs font-bold text-[#b8b0cf]">
+                              <span>
+                                Question {quizStepIndex + 1} of {quizQuestions.length}
+                              </span>
+                              <span>
+                                {answeredQuizCount} / {quizQuestions.length} answered
+                              </span>
+                            </div>
+                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-[#7c3aed] to-[#34d4c6] transition-all"
+                                style={{
+                                  width: `${
+                                    ((quizStepIndex + 1) / quizQuestions.length) * 100
+                                  }%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-white/10 bg-[#0f0b18] p-4 shadow-inner shadow-black/20 sm:p-6">
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#b58dfb]">
+                                    Question {quizStepIndex + 1}
+                                  </p>
+                                  <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-black text-[#d8d0ea]">
+                                    {multiple ? 'Multiple answers' : 'One answer'}
+                                  </span>
+                                </div>
+                                <h2 className="mt-3 text-lg font-black leading-7 text-white sm:text-2xl">
+                                  {question.question}
+                                </h2>
+                                <p className="mt-2 text-sm font-semibold text-[#34d4c6]">
+                                  {multiple
+                                    ? 'Select all correct answers.'
+                                    : 'Select one answer.'}
+                                </p>
+                              </div>
+                              {quizSubmitted && !correct ? (
+                                <span className="shrink-0 rounded-full bg-[#ef4444]/15 px-2.5 py-1 text-xs font-black text-[#ffb4b4]">
+                                  Incorrect
+                                </span>
+                              ) : null}
+                            </div>
+
+                            <div className="mt-6 space-y-3">
+                              {question.options.map((option) => {
+                                const selected = selectedIds.includes(option.id);
+
+                                return (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    onClick={() => toggleQuizAnswer(question, questionKey, option.id)}
+                                    className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left text-sm transition ${
+                                      selected
+                                        ? 'border-[#8b5cf6] bg-[#7c3aed]/20 text-white'
+                                        : 'border-white/10 bg-white/5 text-[#d8d0ea] hover:bg-white/10'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center border text-[10px] font-black ${
+                                        multiple ? 'rounded' : 'rounded-full'
+                                      } ${
+                                        selected
+                                          ? 'border-[#b58dfb] bg-[#7c3aed] text-white'
+                                          : 'border-white/30 bg-[#171322] text-transparent'
+                                      }`}
+                                    >
+                                      {selected ? <Check className="size-3" /> : null}
+                                    </span>
+                                    <span className="leading-5">{option.text}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {quizSubmitted && !correct ? (
+                              <div className="mt-5 rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 p-3 text-sm leading-6 text-[#ffcccc]">
+                                This question was incorrect. Review the related course lesson before retaking the exam.
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCurrentQuizQuestionIndex((index) =>
+                                  Math.max(index - 1, 0),
+                                )
+                              }
+                              disabled={quizStepIndex === 0}
+                              className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-4 text-sm font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Previous question
+                            </button>
+
+                            <div className="flex flex-wrap gap-2 sm:justify-end">
+                              {!isLastQuestion ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setCurrentQuizQuestionIndex((index) =>
+                                      Math.min(index + 1, quizQuestions.length - 1),
+                                    )
+                                  }
+                                  disabled={!quizSubmitted && !questionAnswered}
+                                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#7c3aed] px-4 text-sm font-black text-white transition hover:bg-[#6d31dc] disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Next question
+                                  <ArrowRight className="size-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={submitQuiz}
+                                  disabled={quizSubmitted || !allQuizQuestionsAnswered}
+                                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#7c3aed] px-4 text-sm font-black text-white transition hover:bg-[#6d31dc] disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <FileCheck2 className="size-4" />
+                                  Submit exam
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div className="mt-8 rounded-xl border border-dashed border-white/20 bg-white/5 p-8 text-center">
+                      <HelpCircle className="mx-auto size-10 text-[#b58dfb]" />
+                      <h2 className="mt-3 text-lg font-black text-white">
+                        No exam questions added yet
+                      </h2>
+                      <p className="mt-2 text-sm text-[#c6bed8]">
+                        Add certification questions in the CRM to activate the exam.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="mt-8 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-black text-white">
+                        {quizSubmitted
+                          ? quizPassed
+                            ? 'Exam passed'
+                            : 'Exam not passed yet'
+                          : 'Ready to submit?'}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-[#b8b0cf]">
+                        {quizSubmitted
+                          ? quizPassed
+                            ? `${quizMeta.certificateTitle} is ready. Credential ID: ${certificateNumber}.`
+                            : `Questions to revise: ${incorrectQuizQuestionNumbers
+                                .map((questionNumber) => `Question ${questionNumber}`)
+                                .join(', ')}. Review the course, then retake the exam. Passing score is ${quizMeta.passingScore}%.`
+                          : allQuizQuestionsAnswered
+                            ? 'All questions are answered. Submit from the last question.'
+                            : `Answer ${quizQuestions.length - answeredQuizCount} more question${
+                                quizQuestions.length - answeredQuizCount === 1 ? '' : 's'
+                              } before submitting.`}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {quizSubmitted ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuizSubmitted(false);
+                            setQuizAnswers({});
+                            setCurrentQuizQuestionIndex(0);
+                            setQuizAttempt((value) => value + 1);
+                          }}
+                          className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 px-4 text-sm font-bold text-white transition hover:bg-white/10"
+                        >
+                          Retake exam
+                        </button>
+                      ) : null}
+                      {quizPassed && quizMeta.certificateEnabled ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={downloadCertificate}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#34d4c6] px-4 text-sm font-black text-[#08110f] transition hover:bg-[#5ee7dc]"
+                          >
+                            <Download className="size-4" />
+                            Download certificate
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openLinkedInCertificate}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0a66c2] px-4 text-sm font-black text-white transition hover:bg-[#004182]"
+                          >
+                            <Share2 className="size-4" />
+                            Add to LinkedIn
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                    </>
+                  )}
+                </div>
+              </section>
+            </div>
+          ) : (
+            <div className="relative bg-black">
             <div className="relative mx-auto aspect-video max-h-[68vh] w-full overflow-hidden bg-[#0a0812]">
               {/* Real Video Player or Title Slide Frame */}
               {activeLesson?.videoUrl ? (
@@ -775,7 +1613,15 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                       playsInline
                       onTimeUpdate={() => {
                         if (videoRef.current) {
-                          setCurrentTime(Math.round(videoRef.current.currentTime));
+                          const nextTime = Math.round(videoRef.current.currentTime);
+                          setCurrentTime(nextTime);
+                          const maxTime =
+                            videoRef.current.duration ||
+                            activeLesson.durationSeconds ||
+                            1;
+                          if (nextTime >= maxTime * 0.8) {
+                            markLessonCompleted(activeLesson);
+                          }
                         }
                       }}
                       onEnded={() => {
@@ -817,7 +1663,7 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
               )}
 
               {/* Subtitles Overlay */}
-              {showCaptions && (
+              {showCaptions && !isEmbedUrl(activeLesson?.videoUrl) && (
                 <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 max-w-xl rounded-md bg-black/80 px-4 py-1.5 text-center text-xs font-medium text-white shadow-lg backdrop-blur sm:text-sm pointer-events-none">
                   {currentTime < 10
                     ? 'Welcome to this module with Easy Medical Device Academy.'
@@ -843,7 +1689,8 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                 </button>
               )}
 
-              {/* Video Media Controls Bar */}
+              {/* Video Media Controls Bar (embeds like YouTube bring their own controls) */}
+              {!isEmbedUrl(activeLesson?.videoUrl) && (
               <div className="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-4 pb-3 pt-6">
                 {/* Timeline Scrubber */}
                 <div className="group/time relative mb-2 flex h-2 w-full cursor-pointer items-center">
@@ -1017,18 +1864,18 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
+          </div>
+          )}
 
-          {/* 3. TABS HEADER UNDER VIDEO */}
-          <div className="border-b border-white/10 bg-[#14101e] px-4 sm:px-6">
-            <div className="flex gap-4 overflow-x-auto text-xs font-semibold text-[#8f88a2] sm:text-sm scrollbar-none">
+          {activeLesson?.type !== 'quiz' ? (
+            <>
+              {/* 3. TABS HEADER UNDER VIDEO */}
+              <div className="border-b border-white/10 bg-[#14101e] px-4 sm:px-6">
+                <div className="flex gap-4 overflow-x-auto text-xs font-semibold text-[#8f88a2] sm:text-sm scrollbar-none">
               {[
                 { key: 'overview', label: 'Overview' },
-                { key: 'qa', label: `Q&A (${qaList.length})` },
-                { key: 'notes', label: `Notes (${notes.length})` },
-                { key: 'announcements', label: 'Announcements' },
-                { key: 'reviews', label: 'Reviews' },
                 { key: 'resources', label: 'Templates & Files' },
               ].map((tab) => (
                 <button
@@ -1044,11 +1891,11 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                   {tab.label}
                 </button>
               ))}
-            </div>
-          </div>
+                </div>
+              </div>
 
-          {/* 4. TAB CONTENT PANELS */}
-          <div className="flex-1 bg-[#100d18] p-4 sm:p-6 md:p-8">
+              {/* 4. TAB CONTENT PANELS */}
+              <div className="flex-1 bg-[#100d18] p-4 sm:p-6 md:p-8">
             {/* TAB: OVERVIEW */}
             {activeTab === 'overview' && (
               <div className="mx-auto max-w-4xl space-y-8">
@@ -1057,13 +1904,6 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                     {activeLesson?.title}
                   </h2>
                   <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-[#9f97b4] sm:text-sm">
-                    <span className="flex items-center gap-1 font-bold text-white">
-                      <Star className="size-4 fill-[#f59e0b] text-[#f59e0b]" />
-                      {curriculum.rating} ({curriculum.ratingCount.toLocaleString()} ratings)
-                    </span>
-                    <span>•</span>
-                    <span>{curriculum.studentCount.toLocaleString()} students</span>
-                    <span>•</span>
                     <span>Total {curriculum.totalDuration}</span>
                     <span>•</span>
                     <span>Updated {curriculum.lastUpdated}</span>
@@ -1072,31 +1912,56 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
 
                 {/* Action quick banner for mark complete */}
                 <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#171322] p-4 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => toggleLessonCompleted(activeLesson.id)}
-                      className={`flex size-6 items-center justify-center rounded-md border transition ${
-                        completedLessonIds.has(activeLesson.id)
-                          ? 'border-[#34d4c6] bg-[#34d4c6] text-[#0e0c14]'
-                          : 'border-white/30 bg-white/5 text-white hover:border-white'
-                      }`}
-                    >
-                      {completedLessonIds.has(activeLesson.id) && <Check className="size-4 stroke-[3]" />}
-                    </button>
-                    <div>
-                      <p className="text-sm font-bold text-white">
-                        {completedLessonIds.has(activeLesson.id)
-                          ? 'Lesson Completed'
-                          : 'Mark lesson as complete'}
-                      </p>
-                      <p className="text-xs text-[#8e879f]">
-                        Advance your certificate progress
-                      </p>
+                  {hasFullAccess ? (
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleLessonCompleted(activeLesson.id)}
+                        className={`flex size-6 items-center justify-center rounded-md border transition ${
+                          completedLessonIds.has(activeLesson.id)
+                            ? 'border-[#34d4c6] bg-[#34d4c6] text-[#0e0c14]'
+                            : 'border-white/30 bg-white/5 text-white hover:border-white'
+                        }`}
+                      >
+                        {completedLessonIds.has(activeLesson.id) && <Check className="size-4 stroke-[3]" />}
+                      </button>
+                      <div>
+                        <p className="text-sm font-bold text-white">
+                          {completedLessonIds.has(activeLesson.id)
+                            ? 'Lesson Completed'
+                            : 'Mark lesson as complete'}
+                        </p>
+                        <p className="text-xs text-[#8e879f]">
+                          Advance your certificate progress
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-9 items-center justify-center rounded-lg bg-[#7c3aed]/20 text-[#b58dfb]">
+                        <LockKeyhole className="size-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-white">
+                          Free preview mode
+                        </p>
+                        <p className="text-xs text-[#8e879f]">
+                          Sign in to unlock all lessons and save your progress.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2">
+                    {!hasFullAccess ? (
+                      <button
+                        type="button"
+                        onClick={signInToUnlock}
+                        className="rounded-lg bg-[#7c3aed] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#6d31dc]"
+                      >
+                        Sign in
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={handlePrevLesson}
@@ -1116,67 +1981,67 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                 </div>
 
                 {/* Lesson Description */}
-                <div className="rounded-2xl border border-white/10 bg-[#171322] p-6">
-                  <h3 className="text-lg font-bold text-white">
-                    {activeLesson?.type === 'article' ? 'Article Reading Material' : 'About this Lecture'}
-                  </h3>
-                  {activeLesson?.description ? (
-                    /<(h[1-6]|p|div|ul|ol|blockquote|strong|b|em|i|br|hr)/i.test(activeLesson.description) ? (
-                      <div
-                        className="mt-4 text-sm leading-relaxed text-[#c6bed8] space-y-3
-                          [&_h1]:text-2xl [&_h1]:font-black [&_h1]:text-white [&_h1]:mt-6 [&_h1]:mb-3 [&_h1]:border-b [&_h1]:border-white/10 [&_h1]:pb-2
-                          [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-5 [&_h2]:mb-2.5
-                          [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-[#b58dfb] [&_h3]:mt-4 [&_h3]:mb-1.5
-                          [&_p]:mb-3 [&_p]:leading-relaxed
-                          [&_blockquote]:border-l-4 [&_blockquote]:border-[#7c3aed] [&_blockquote]:bg-[#7c3aed]/10 [&_blockquote]:p-4 [&_blockquote]:rounded-r-xl [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-white
-                          [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1.5 [&_ul]:my-3
-                          [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1.5 [&_ol]:my-3
-                          [&_hr]:my-6 [&_hr]:border-white/10
-                          [&_mark]:bg-amber-400/20 [&_mark]:text-amber-200 [&_mark]:px-1 [&_mark]:rounded
-                          [&_a]:text-[#b58dfb] [&_a]:underline [&_a]:font-bold"
-                        dangerouslySetInnerHTML={{ __html: activeLesson.description }}
-                      />
+                {activeLesson?.type !== 'article' ? (
+                  <div className="rounded-2xl border border-white/10 bg-[#171322] p-6">
+                    <h3 className="text-lg font-bold text-white">About this Lecture</h3>
+                    {activeLesson?.description ? (
+                      /<(h[1-6]|p|div|ul|ol|blockquote|strong|b|em|i|br|hr)/i.test(activeLesson.description) ? (
+                        <div
+                          className="mt-4 text-sm leading-relaxed text-[#c6bed8] space-y-3
+                            [&_h1]:text-2xl [&_h1]:font-black [&_h1]:text-white [&_h1]:mt-6 [&_h1]:mb-3 [&_h1]:border-b [&_h1]:border-white/10 [&_h1]:pb-2
+                            [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-5 [&_h2]:mb-2.5
+                            [&_h3]:text-base [&_h3]:font-bold [&_h3]:text-[#b58dfb] [&_h3]:mt-4 [&_h3]:mb-1.5
+                            [&_p]:mb-3 [&_p]:leading-relaxed
+                            [&_blockquote]:border-l-4 [&_blockquote]:border-[#7c3aed] [&_blockquote]:bg-[#7c3aed]/10 [&_blockquote]:p-4 [&_blockquote]:rounded-r-xl [&_blockquote]:my-4 [&_blockquote]:italic [&_blockquote]:text-white
+                            [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1.5 [&_ul]:my-3
+                            [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1.5 [&_ol]:my-3
+                            [&_hr]:my-6 [&_hr]:border-white/10
+                            [&_mark]:bg-amber-400/20 [&_mark]:text-amber-200 [&_mark]:px-1 [&_mark]:rounded
+                            [&_a]:text-[#b58dfb] [&_a]:underline [&_a]:font-bold"
+                          dangerouslySetInnerHTML={{ __html: activeLesson.description }}
+                        />
+                      ) : (
+                        <p className="mt-3 text-sm leading-relaxed text-[#c6bed8] whitespace-pre-wrap">
+                          {activeLesson.description}
+                        </p>
+                      )
                     ) : (
-                      <p className="mt-3 text-sm leading-relaxed text-[#c6bed8] whitespace-pre-wrap">
-                        {activeLesson.description}
-                      </p>
-                    )
-                  ) : (
-                    <p className="mt-3 text-sm text-[#8e879f] italic">No description provided for this lesson.</p>
-                  )}
+                      <p className="mt-3 text-sm text-[#8e879f] italic">No description provided for this lesson.</p>
+                    )}
 
-                  {/* Attached resources */}
-                  {activeLesson?.resources && activeLesson.resources.length > 0 && (
-                    <div className="mt-6 border-t border-white/10 pt-4">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#b58dfb]">
-                        Downloadable Resources in this Lecture
-                      </h4>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {activeLesson.resources.map((res) => (
-                          <div
-                            key={res.name}
-                            className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 p-3 text-xs"
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <FileSpreadsheet className="size-4 text-[#34d4c6]" />
-                              <div>
-                                <p className="font-semibold text-white">{res.name}</p>
-                                <p className="text-[11px] text-[#8e879f]">{res.size} • {res.type}</p>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              className="rounded p-1.5 text-[#b58dfb] transition hover:bg-white/10 hover:text-white"
-                              title="Download resource"
+                    {/* Attached resources */}
+                    {visibleResources.length > 0 && (
+                      <div className="mt-6 border-t border-white/10 pt-4">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#b58dfb]">
+                          Downloadable Resources in this Lecture
+                        </h4>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {visibleResources.map((res) => (
+                            <div
+                              key={res.name}
+                              className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 p-3 text-xs"
                             >
-                              <Download className="size-4" />
-                            </button>
-                          </div>
-                        ))}
+                              <div className="flex items-center gap-2.5">
+                                <FileSpreadsheet className="size-4 text-[#34d4c6]" />
+                                <div>
+                                  <p className="font-semibold text-white">{res.name}</p>
+                                  <p className="text-[11px] text-[#8e879f]">{res.size} • {res.type}</p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="rounded p-1.5 text-[#b58dfb] transition hover:bg-white/10 hover:text-white"
+                                title="Download resource"
+                              >
+                                <Download className="size-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                ) : null}
 
                 {/* Instructor Card */}
                 <div className="rounded-2xl border border-white/10 bg-[#171322] p-6">
@@ -1480,8 +2345,8 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                   </p>
 
                   <div className="mt-6 space-y-3">
-                    {activeLesson?.resources && activeLesson.resources.length > 0 ? (
-                      activeLesson.resources.map((item: any, idx: number) => (
+                    {visibleResources.length > 0 ? (
+                      visibleResources.map((item: any, idx: number) => (
                         <div
                           key={idx}
                           className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center"
@@ -1518,7 +2383,9 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                 </div>
               </div>
             )}
-          </div>
+              </div>
+            </>
+          ) : null}
         </div>
 
         {/* RIGHT SIDEBAR: COURSE CONTENT & AI TUTOR */}
@@ -1572,6 +2439,9 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                     ).length;
                     const secTotal = section.lessons.length;
                     const isExpanded = !!expandedSections[section.id];
+                    const visibleLessons = hasFullAccess
+                      ? section.lessons
+                      : section.lessons.filter((lesson) => lesson.previewEnabled);
 
                     return (
                       <div key={section.id} className="bg-[#14101e]">
@@ -1586,8 +2456,8 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                               {section.title}
                             </h3>
                             <p className="mt-1 text-[11px] text-[#8e879f]">
-                              {secCompleted} / {secTotal} |{' '}
-                              {section.lessons.reduce((acc, l) => acc + Math.round(l.durationSeconds / 60), 0)} min
+                              {hasFullAccess ? `${secCompleted} / ${secTotal}` : `${visibleLessons.length} preview`} |{' '}
+                              {visibleLessons.reduce((acc, l) => acc + Math.round(l.durationSeconds / 60), 0)} min
                             </p>
                           </div>
                           <ChevronDown
@@ -1603,11 +2473,16 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                             {section.lessons.map((lesson) => {
                               const isActive = activeLessonId === lesson.id;
                               const isDone = completedLessonIds.has(lesson.id);
+                              const isLocked = !canAccessLesson(lesson);
 
                               return (
                                 <div
                                   key={lesson.id}
                                   onClick={() => {
+                                    if (isLocked) {
+                                      signInToUnlock();
+                                      return;
+                                    }
                                     setActiveLessonId(lesson.id);
                                     setCurrentTime(0);
                                     setIsPlaying(true);
@@ -1615,7 +2490,9 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                                   className={`group flex cursor-pointer items-start gap-3 p-3.5 transition ${
                                     isActive
                                       ? 'border-l-4 border-[#7c3aed] bg-[#221738] text-white'
-                                      : 'hover:bg-white/5 text-[#c8c0da]'
+                                      : isLocked
+                                        ? 'text-[#716982] hover:bg-white/[0.03]'
+                                        : 'hover:bg-white/5 text-[#c8c0da]'
                                   }`}
                                 >
                                   {/* Checkbox */}
@@ -1625,11 +2502,13 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                                     className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition ${
                                       isDone
                                         ? 'border-[#34d4c6] bg-[#34d4c6] text-[#0e0c14]'
-                                        : 'border-white/30 bg-white/5 hover:border-white'
+                                        : isLocked
+                                          ? 'border-white/10 bg-white/[0.03] text-white/30'
+                                          : 'border-white/30 bg-white/5 hover:border-white'
                                     }`}
-                                    aria-label="Toggle completed"
+                                    aria-label={isLocked ? 'Sign in to unlock lesson' : 'Toggle completed'}
                                   >
-                                    {isDone && <Check className="size-3 stroke-[3]" />}
+                                    {isDone ? <Check className="size-3 stroke-[3]" /> : isLocked ? <LockKeyhole className="size-2.5" /> : null}
                                   </button>
 
                                   <div className="flex-1">
@@ -1643,6 +2522,17 @@ export function CoursePlayer({ courseId = 'eu-mdr-technical-file' }: CoursePlaye
                                     <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#8e879f]">
                                       <PlayCircle className="size-3 text-[#b58dfb]" />
                                       <span>{lesson.duration}</span>
+                                      {lesson.previewEnabled && (
+                                        <span className="rounded bg-[#34d4c6]/15 px-1 py-0.5 font-bold text-[#34d4c6]">
+                                          Preview
+                                        </span>
+                                      )}
+                                      {isLocked && (
+                                        <span className="flex items-center gap-0.5 rounded bg-white/5 px-1 py-0.5 text-white/40">
+                                          <LockKeyhole className="size-2.5" />
+                                          <span>Locked</span>
+                                        </span>
+                                      )}
                                       {lesson.resources && lesson.resources.length > 0 && (
                                         <span className="flex items-center gap-0.5 rounded bg-white/10 px-1 py-0.2 text-[#34d4c6]">
                                           <FileSpreadsheet className="size-2.5" />

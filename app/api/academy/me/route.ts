@@ -1,21 +1,13 @@
 import { featuredCourses, mapSupabaseCourse } from '@/lib/academy-data';
 import {
+  type AcademyAuthUser,
   academyRestFetch,
+  getAcademyEnrollmentsForUser,
   getAcademyDisplayName,
   getAcademyUserFromRequest,
   json,
 } from '@/lib/academy-auth';
-import { getCurriculumForCourse } from '@/lib/curriculum-data';
-
-type EnrollmentRow = {
-  id: string;
-  course_id: string;
-  status: string;
-  amount_cents?: number;
-  currency?: string;
-  created_at?: string;
-  updated_at?: string;
-};
+import { getLessonsForCourse } from '@/lib/academy-lessons';
 
 type ProgressRow = {
   course_id: string;
@@ -38,19 +30,21 @@ export async function GET(request: Request) {
   }
 
   try {
+    const authenticatedUser = { ...user, email: user.email };
     const [enrollments, progress, certificates] = await Promise.all([
-      fetchRows<EnrollmentRow>(
-        `enrollments?select=*&user_id=eq.${encodeURIComponent(user.id)}&order=updated_at.desc`,
-      ),
-      fetchRows<ProgressRow>(
-        `lesson_progress?select=*&user_id=eq.${encodeURIComponent(user.id)}`,
-      ),
-      fetchRows<CertificateRow>(
-        `certificates?select=*&user_id=eq.${encodeURIComponent(user.id)}&order=issued_at.desc`,
+      getAcademyEnrollmentsForUser({
+        userId: user.id,
+        learnerEmail: user.email,
+      }),
+      fetchRowsForUser<ProgressRow>('lesson_progress', authenticatedUser),
+      fetchOptionalRowsForUser<CertificateRow>(
+        'certificates',
+        authenticatedUser,
+        'issued_at.desc',
       ),
     ]);
     const activeEnrollments = enrollments.filter((row) =>
-      ['active', 'completed', 'pending_payment'].includes(row.status),
+      ['active', 'completed', 'pending_payment'].includes(row.status || ''),
     );
     const courseIds = [...new Set(activeEnrollments.map((row) => row.course_id))];
     const supabaseCourses = courseIds.length
@@ -80,13 +74,12 @@ export async function GET(request: Request) {
       {},
     );
 
-    const learningCourses = activeEnrollments.map((enrollment) => {
+    const learningCourses = await Promise.all(activeEnrollments.map(async (enrollment) => {
       const course =
         coursesById.get(enrollment.course_id) ||
         featuredCourses.find((item) => item.id === enrollment.course_id) ||
         featuredCourses[0];
-      const curriculum = getCurriculumForCourse(enrollment.course_id);
-      const allLessons = curriculum.sections.flatMap((section) => section.lessons);
+      const allLessons = await getLessonsForCourse(enrollment.course_id);
       const completedIds = new Set(
         completedLessonsByCourse[enrollment.course_id] || [],
       );
@@ -119,7 +112,7 @@ export async function GET(request: Request) {
         status: enrollment.status,
         certificate,
       };
-    });
+    }));
 
     return json({
       user: {
@@ -151,4 +144,46 @@ async function fetchRows<T>(path: string) {
   }
 
   return (await response.json()) as T[];
+}
+
+async function fetchRowsForUser<T>(
+  table: string,
+  user: AcademyAuthUser & { email: string },
+  order?: string,
+) {
+  const orderParam = order ? `&order=${order}` : '';
+  const byUserId = await academyRestFetch(
+    `${table}?select=*&user_id=eq.${encodeURIComponent(user.id)}${orderParam}`,
+    { useServiceRole: true },
+  );
+
+  if (byUserId.ok) {
+    const rows = (await byUserId.json()) as T[];
+    if (rows.length > 0) {
+      return rows;
+    }
+  }
+
+  const byEmail = await academyRestFetch(
+    `${table}?select=*&learner_email=eq.${encodeURIComponent(user.email)}${orderParam}`,
+    { useServiceRole: true },
+  );
+
+  if (!byEmail.ok) {
+    throw new Error(await byEmail.text());
+  }
+
+  return (await byEmail.json()) as T[];
+}
+
+async function fetchOptionalRowsForUser<T>(
+  table: string,
+  user: AcademyAuthUser & { email: string },
+  order?: string,
+) {
+  try {
+    return await fetchRowsForUser<T>(table, user, order);
+  } catch {
+    return [];
+  }
 }

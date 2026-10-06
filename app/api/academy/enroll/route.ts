@@ -1,11 +1,13 @@
 import {
-  academyRestFetch,
+  explainSupabaseEnrollmentError,
+  getAcademyEnrollmentForUser,
   getAcademyCourseForAccess,
   getAcademyDisplayName,
   getAcademyUserFromRequest,
   isFreeCourse,
   json,
   readJson,
+  saveAcademyEnrollment,
 } from '@/lib/academy-auth';
 
 type EnrollBody = {
@@ -28,19 +30,40 @@ export async function POST(request: Request) {
     return json({ message: 'This course is not available.' }, 404);
   }
 
-  const existingResponse = await academyRestFetch(
-    `enrollments?select=*&user_id=eq.${encodeURIComponent(user.id)}&course_id=eq.${encodeURIComponent(course.id)}&limit=1`,
-    { useServiceRole: true },
-  );
-  const existing = existingResponse.ok
-    ? ((await existingResponse.json()) as { status?: string }[])
-    : [];
+  const freeCourse = isFreeCourse(course);
 
-  if (existing[0]?.status === 'active' || existing[0]?.status === 'completed') {
-    return json({ enrolled: true, course, status: existing[0].status });
+  try {
+    const existing = await getAcademyEnrollmentForUser({
+      userId: user.id,
+      learnerEmail: user.email,
+      courseId: course.id,
+    });
+
+    if (existing?.status === 'active' || existing?.status === 'completed') {
+      return json({ enrolled: true, course, status: existing.status });
+    }
+  } catch (error) {
+    if (freeCourse) {
+      return json({
+        enrolled: true,
+        course,
+        enrollmentWarning: explainSupabaseEnrollmentError(
+          error instanceof Error ? error.message : '',
+        ),
+      });
+    }
+
+    return json(
+      {
+        message: explainSupabaseEnrollmentError(
+          error instanceof Error ? error.message : '',
+        ),
+      },
+      502,
+    );
   }
 
-  if (!isFreeCourse(course)) {
+  if (!freeCourse) {
     return json(
       {
         requiresPayment: true,
@@ -51,37 +74,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const payload = {
-    user_id: user.id,
-    learner_email: user.email,
-    learner_name: getAcademyDisplayName(user),
-    course_id: course.id,
-    amount_cents: 0,
-    currency: 'usd',
-    status: 'active',
-    updated_at: new Date().toISOString(),
-  };
+  try {
+    const enrollment = await saveAcademyEnrollment({
+      userId: user.id,
+      learnerEmail: user.email,
+      learnerName: getAcademyDisplayName(user),
+      courseId: course.id,
+      amountCents: 0,
+      currency: 'usd',
+      status: 'active',
+    });
 
-  const response = await academyRestFetch('enrollments?on_conflict=user_id,course_id', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    prefer: 'resolution=merge-duplicates,return=representation',
-    useServiceRole: true,
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    return json(
-      {
-        message:
-          detail ||
-          'Enrollment could not be saved. Check the Academy Supabase schema.',
-      },
-      502,
-    );
+    return json({ enrolled: true, course, enrollment });
+  } catch (error) {
+    return json({
+      enrolled: true,
+      course,
+      enrollmentWarning: explainSupabaseEnrollmentError(
+        error instanceof Error ? error.message : '',
+      ),
+    });
   }
-
-  const enrollment = await response.json();
-
-  return json({ enrolled: true, course, enrollment });
 }

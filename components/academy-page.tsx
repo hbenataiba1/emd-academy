@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -35,7 +35,6 @@ import {
 
 import {
   type AcademyCourse,
-  companyLogos,
   courseCategories,
   featuredCourses,
 } from '@/lib/academy-data';
@@ -51,12 +50,25 @@ import {
 
 import { AcademyHeader, AcademyFooter } from '@/components/academy-shell';
 import {
+  type CommunityPost,
+  isSafeLinkedInEmbedUrl,
+} from '@/lib/community-posts';
+import {
+  buildCertificateSvg,
+  formatCertificateDate,
+} from '@/lib/academy-certificate';
+import {
   getAcademyAuthHeader,
   getStoredAcademySession,
 } from '@/lib/academy-session';
+import {
+  getStoredLearningCourses,
+  markCourseStarted,
+} from '@/lib/academy-learning-state';
 
 type AcademyPageProps = {
   initialCourses?: AcademyCourse[];
+  communityPosts?: CommunityPost[];
 };
 
 type CheckoutNotice = {
@@ -65,27 +77,144 @@ type CheckoutNotice = {
   message: string;
 };
 
-const stats = [
-  { label: 'Compliance courses', value: '24+' },
-  { label: 'Templates and examples', value: '120+' },
-  { label: 'Expert-led lessons', value: '80h' },
-];
+type MePayload = {
+  courses?: {
+    id: string;
+    progress: number;
+    status?: string;
+    certificate?: { certificate_number: string };
+  }[];
+};
+
+type CourseLearnerState = {
+  enrolled: boolean;
+  progress: number;
+  certificateNumber?: string;
+};
+
+// Sample of the exact certificate learners receive (same template as the real one).
+const sampleCertificatePreview = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+  buildCertificateSvg({
+    learnerName: 'Your Name',
+    courseTitle: 'EU MDR Technical File Masterclass',
+    certificateTitle: 'Certificate of Completion',
+    certificateNumber: 'EMDA-2026-XXXX-00000000',
+    issuedDate: formatCertificateDate(),
+  }),
+)}`;
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
   notation: 'compact',
   maximumFractionDigits: 1,
 });
 
+function parseResponsePayload(text: string) {
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return {};
+  }
+}
+
+function getReadableResponseError(text: string) {
+  const cleaned = text
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned || cleaned.startsWith('<!DOCTYPE')) return '';
+
+  return cleaned.length > 220 ? `${cleaned.slice(0, 220)}...` : cleaned;
+}
+
 export function AcademyPage({
   initialCourses = featuredCourses,
+  communityPosts = [],
 }: AcademyPageProps) {
   const [selectedCategory, setSelectedCategory] =
     useState<(typeof courseCategories)[number]>('All');
   const [search, setSearch] = useState('');
   const [pendingCourse, setPendingCourse] = useState<string | null>(null);
+  const postsScrollerRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollPosts = (direction: 1 | -1) => {
+    const scroller = postsScrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollBy({ left: direction * scroller.clientWidth, behavior: 'smooth' });
+  };
   const [checkoutNotice, setCheckoutNotice] = useState<CheckoutNotice | null>(
     null,
   );
+
+  const [learnerStates, setLearnerStates] = useState<
+    Record<string, CourseLearnerState>
+  >({});
+
+  // When logged in, show each course's progress / completion in the catalog.
+  useEffect(() => {
+    const session = getStoredAcademySession();
+    if (!session) return;
+    let cancelled = false;
+
+    const merge = (
+      states: Record<string, CourseLearnerState>,
+      id: string,
+      next: CourseLearnerState,
+    ) => {
+      const existing = states[id];
+      states[id] = existing
+        ? {
+            enrolled: existing.enrolled || next.enrolled,
+            progress: Math.max(existing.progress, next.progress),
+            certificateNumber: existing.certificateNumber || next.certificateNumber,
+          }
+        : next;
+    };
+
+    const buildLocalStates = () => {
+      const states: Record<string, CourseLearnerState> = {};
+      getStoredLearningCourses().forEach((course) => {
+        const completed = course.completedLessonIds.length;
+        const total = Math.max(course.lessons || 1, completed || 1);
+        const progress = Math.min(100, Math.round((completed / total) * 100));
+        merge(states, course.id, { enrolled: progress > 0, progress });
+      });
+      return states;
+    };
+
+    setLearnerStates(buildLocalStates());
+
+    fetch('/api/academy/me', { headers: getAcademyAuthHeader(session) })
+      .then(
+        (response) => (response.ok ? response.json() : null) as Promise<MePayload | null>,
+      )
+      .then(
+        (payload: {
+          courses?: {
+            id: string;
+            progress: number;
+            status?: string;
+            certificate?: { certificate_number: string };
+          }[];
+        } | null) => {
+          if (cancelled || !payload?.courses) return;
+          const states = buildLocalStates();
+          payload.courses.forEach((course) => {
+            merge(states, course.id, {
+              enrolled: ['active', 'completed'].includes(course.status || ''),
+              progress: course.progress,
+              certificateNumber: course.certificate?.certificate_number,
+            });
+          });
+          setLearnerStates(states);
+        },
+      )
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredCourses = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -110,7 +239,7 @@ export function AcademyPage({
 
     if (!session) {
       window.location.assign(
-        `/academy/login?next=${encodeURIComponent('/academy#courses')}`,
+        `/academy/login?next=${encodeURIComponent(`/academy/course/${courseId}`)}`,
       );
       return;
     }
@@ -120,6 +249,14 @@ export function AcademyPage({
         course.priceLabel?.trim().toLowerCase() === 'free' ||
         course.priceLabel?.trim().toLowerCase() === '$0'
       : false;
+
+    if (isFree) {
+      if (course) {
+        markCourseStarted(course);
+      }
+      window.location.assign(`/academy/learn/${courseId}`);
+      return;
+    }
 
     setPendingCourse(courseId);
     setCheckoutNotice({
@@ -140,7 +277,8 @@ export function AcademyPage({
         },
         body: JSON.stringify({ courseId }),
       });
-      const payload = (await response.json().catch(() => ({}))) as {
+      const responseText = await response.text();
+      const payload = parseResponsePayload(responseText) as {
         url?: string;
         message?: string;
         enrolled?: boolean;
@@ -148,7 +286,7 @@ export function AcademyPage({
 
       if (response.status === 401) {
         window.location.assign(
-          `/academy/login?next=${encodeURIComponent('/academy#courses')}`,
+          `/academy/login?next=${encodeURIComponent(`/academy/course/${courseId}`)}`,
         );
         return;
       }
@@ -168,6 +306,7 @@ export function AcademyPage({
         kind: 'error',
         message:
           payload.message ||
+          getReadableResponseError(responseText) ||
           'This course needs setup before enrollment is available.',
       });
     } catch (err: any) {
@@ -189,9 +328,6 @@ export function AcademyPage({
       <section className="bg-[#f8f6ff]">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 md:grid-cols-[minmax(0,1fr)_minmax(360px,0.84fr)] lg:px-8 lg:py-16">
           <div>
-            <Badge className="mb-5 border-[#d9ceff] bg-white text-[#6d31dc]">
-              Regulatory training for real approvals
-            </Badge>
             <h1 className="max-w-4xl text-4xl font-bold leading-[1.06] text-[#171321] sm:text-5xl lg:text-6xl">
               Learn medical device compliance from real-world experts
             </h1>
@@ -218,21 +354,6 @@ export function AcademyPage({
               </Link>
             </div>
 
-            <div className="mt-9 grid max-w-2xl grid-cols-3 gap-3">
-              {stats.map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-lg border border-[#e7e1f6] bg-white p-4"
-                >
-                  <div className="text-2xl font-bold text-[#191625]">
-                    {item.value}
-                  </div>
-                  <div className="mt-1 text-xs font-medium text-[#6e687d]">
-                    {item.label}
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Hero Right: Photo + floating badges */}
@@ -271,21 +392,6 @@ export function AcademyPage({
           </div>
         </div>
 
-        <div className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
-          <p className="text-center text-sm font-semibold text-[#706982]">
-            Trusted by medical device teams building compliant products
-          </p>
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {companyLogos.map((name) => (
-              <div
-                key={name}
-                className="rounded-lg border border-[#e6e0f4] bg-white px-4 py-3 text-center text-sm font-bold text-[#8b849a]"
-              >
-                {name}
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
 
       <section
@@ -360,6 +466,7 @@ export function AcademyPage({
               key={course.id}
               course={course}
               pending={pendingCourse === course.id}
+              learnerState={learnerStates[course.id]}
               notice={
                 checkoutNotice?.courseId === course.id ? checkoutNotice : null
               }
@@ -385,8 +492,10 @@ export function AcademyPage({
         id="certificate"
         className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"
       >
-        <div className="relative overflow-hidden rounded-3xl bg-[#171321] p-8 shadow-2xl sm:p-10 md:p-12">
+        <div className="relative rounded-3xl bg-[#171321] p-8 shadow-2xl sm:p-10 md:p-12">
 
+          {/* Decorations are clipped to the box; the certificate is not */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl">
           {/* Background pattern */}
           <div className="pointer-events-none absolute inset-0 opacity-[0.04]"
             style={{
@@ -397,68 +506,25 @@ export function AcademyPage({
           {/* Glow blobs */}
           <div className="pointer-events-none absolute -top-20 left-1/4 size-72 rounded-full bg-[#7c3aed] opacity-20 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-16 right-1/4 size-60 rounded-full bg-[#08a99f] opacity-15 blur-3xl" />
+          </div>
 
           <div className="relative flex flex-col items-center gap-10 md:flex-row md:items-center">
 
-            {/* ── CERTIFICATE BADGE ── */}
-            <div className="shrink-0 flex items-center justify-center">
-              {/* Outer glow ring */}
-              <div className="relative flex size-48 items-center justify-center rounded-full bg-gradient-to-br from-[#7c3aed] via-[#9b5de5] to-[#08a99f] p-[3px] shadow-[0_0_50px_rgba(124,58,237,0.5)]">
-                {/* Middle ring */}
-                <div className="flex size-full items-center justify-center rounded-full bg-[#171321] p-[2px]">
-                  {/* Inner decorative ring */}
-                  <div className="relative flex size-full items-center justify-center rounded-full border border-dashed border-[#7c3aed]/50">
-
-                    {/* Corner dots */}
-                    {[0, 90, 180, 270].map((deg) => (
-                      <span
-                        key={deg}
-                        className="absolute size-2 rounded-full bg-[#7c3aed]"
-                        style={{
-                          top: '50%',
-                          left: '50%',
-                          transform: `rotate(${deg}deg) translateY(-88px) translate(-50%, -50%)`,
-                        }}
-                      />
-                    ))}
-
-                    {/* Center content */}
-                    <div className="flex flex-col items-center text-center">
-                      {/* Top arc text using SVG */}
-                      <svg viewBox="0 0 160 160" className="absolute size-full">
-                        <path
-                          id="top-arc"
-                          d="M 25,80 A 55,55 0 0,1 135,80"
-                          fill="none"
-                        />
-                        <text fontSize="10" fontWeight="700" letterSpacing="3" fill="#b58dfb">
-                          <textPath href="#top-arc" startOffset="50%" textAnchor="middle">
-                            EASY MEDICAL DEVICE
-                          </textPath>
-                        </text>
-                        <path
-                          id="bottom-arc"
-                          d="M 25,80 A 55,55 0 0,0 135,80"
-                          fill="none"
-                        />
-                        <text fontSize="9" fontWeight="600" letterSpacing="2.5" fill="#34d4c6">
-                          <textPath href="#bottom-arc" startOffset="50%" textAnchor="middle">
-                            ACADEMY • CERTIFIED
-                          </textPath>
-                        </text>
-                      </svg>
-
-                      {/* Shield icon */}
-                      <ShieldCheck className="size-10 text-[#b58dfb]" strokeWidth={1.5} />
-
-                      {/* Year */}
-                      <span className="mt-1 text-[10px] font-black tracking-[0.2em] text-[#34d4c6]">
-                        2026
-                      </span>
-                    </div>
-                  </div>
+            {/* ── CERTIFICATE MOCKUP ── */}
+            <div className="relative w-full max-w-sm shrink-0 md:w-[380px] lg:w-[440px]">
+              <div className="relative -rotate-3 rounded-2xl bg-gradient-to-br from-[#a78bfa] via-[#9b5de5] to-[#34d4c6] p-[3px] transition duration-500 hover:-rotate-1 hover:scale-[1.02]">
+                <div className="overflow-hidden rounded-[13px] bg-white">
+                  <img
+                    src={sampleCertificatePreview}
+                    alt="Sample Easy Medical Device Academy certificate"
+                    className="block w-full"
+                    loading="lazy"
+                  />
                 </div>
               </div>
+              <p className="relative mt-5 text-center text-[11px] text-[#8e879f]">
+                Sample preview of the certificate you receive
+              </p>
             </div>
 
             {/* ── TEXT CONTENT ── */}
@@ -615,96 +681,194 @@ export function AcademyPage({
             </p>
           </div>
 
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                name: 'Sarah Van Der Berg',
-                role: 'Senior Regulatory Affairs Specialist at MedTech Europe',
-                time: 'Shared 2 days ago',
-                course: 'EU MDR Technical Documentation Intensive',
-                post: 'Thrilled to complete the EU MDR Technical Documentation Masterclass with Monir El Azzouzi! The GSPR mapping and notified body review logic are practical and immediate. Highly recommended for any RA team! 🚀📜 #MDR #EasyMedicalDevice',
-                likes: 84,
-                comments: 12,
-              },
-              {
-                name: 'Marcus Lindqvist',
-                role: 'Head of Quality & Compliance at Nordic Health Devices',
-                time: 'Shared 1 week ago',
-                course: 'ISO 13485 QMS Implementation Sprint',
-                post: 'Proud to receive my official certificate from Easy Medical Device Academy. Practical templates, zero fluff, and clear auditor expectations. Essential training for quality managers! ⭐',
-                likes: 112,
-                comments: 19,
-              },
-              {
-                name: 'Dr. Elena Rossi',
-                role: 'Digital Health & SaMD Consultant',
-                time: 'Shared 2 weeks ago',
-                course: 'Software as a Medical Device (SaMD) Compliance',
-                post: 'Just received my SaMD Compliance certification! Connecting IEC 62304 with cybersecurity and AI claims was presented with crystal clarity by Monir. Great academy! 💡',
-                likes: 96,
-                comments: 15,
-              },
-            ].map((item) => (
-              <div
-                key={item.name}
-                className="flex flex-col justify-between rounded-xl border border-[#ded6f3] bg-white p-5 shadow-sm transition hover:shadow-md"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-11 items-center justify-center rounded-full bg-[#eee8fb] font-bold text-[#6b34e9]">
-                        {item.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-[#171321]">
-                          {item.name}
-                        </h4>
-                        <p className="text-xs text-[#6e687d]">{item.role}</p>
-                        <p className="text-[11px] text-[#8e889d]">{item.time}</p>
-                      </div>
+          {communityPosts.length > 0 ? (
+            <div className="relative mt-10 px-11 sm:px-14">
+              {communityPosts.length > 3 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => scrollPosts(-1)}
+                    aria-label="Previous posts"
+                    className="absolute left-0 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#ded6f3] bg-white text-[#6d31dc] shadow-md transition hover:bg-[#f4f1ff]"
+                  >
+                    <ChevronLeft className="size-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollPosts(1)}
+                    aria-label="Next posts"
+                    className="absolute right-0 top-1/2 z-10 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-[#ded6f3] bg-white text-[#6d31dc] shadow-md transition hover:bg-[#f4f1ff]"
+                  >
+                    <ChevronRight className="size-5" />
+                  </button>
+                </>
+              ) : null}
+            <div
+              ref={postsScrollerRef}
+              className="flex snap-x snap-mandatory items-start gap-6 overflow-x-auto scroll-smooth pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {communityPosts.map((post) =>
+                isSafeLinkedInEmbedUrl(post.embed_url) ? (
+                  <div
+                    key={post.id}
+                    className="w-full shrink-0 snap-start overflow-hidden rounded-xl border border-[#ded6f3] bg-white shadow-sm sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)]"
+                  >
+                    <div className="relative h-[560px] overflow-hidden">
+                      <iframe
+                        src={post.embed_url}
+                        title={`LinkedIn post by ${post.author_name || 'Easy Medical Device Academy community'}`}
+                        className="block h-full w-[calc(100%+18px)] border-0"
+                        loading="lazy"
+                        allowFullScreen
+                      />
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent" />
                     </div>
-                    {/* LinkedIn icon */}
-                    <div className="flex size-7 items-center justify-center rounded bg-[#0a66c2] text-white shadow-sm">
-                      <svg
-                        className="size-4 fill-current"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64c-.92 0-1.66.74-1.66 1.66 0 .92.74 1.66 1.66 1.66.92 0 1.66-.74 1.66-1.66 0-.92-.74-1.66-1.66-1.66Z" />
-                      </svg>
-                    </div>
+                    <a
+                      href={post.linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 border-t border-[#f0edf8] py-2.5 text-xs font-semibold text-[#0a66c2] hover:bg-[#f6faff]"
+                    >
+                      View on LinkedIn
+                      <ArrowRight className="size-3.5" />
+                    </a>
                   </div>
-
-                  <p className="mt-4 text-xs leading-relaxed text-[#302a42] sm:text-sm">
-                    {item.post}
-                  </p>
-
-                  <div className="mt-4 rounded-lg border border-[#e5def2] bg-[#fbfbfe] p-3">
-                    <div className="flex items-center gap-2">
-                      <Award className="size-4 text-[#7c3aed]" />
-                      <span className="text-xs font-semibold text-[#171321]">
-                        Verified Certificate of Completion
-                      </span>
+                ) : (
+                  <div
+                    key={post.id}
+                    className="flex w-full shrink-0 snap-start flex-col justify-between rounded-xl border border-[#ded6f3] bg-white p-5 shadow-sm sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)]"
+                  >
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-11 items-center justify-center rounded-full bg-[#eee8fb] font-bold text-[#6b34e9]">
+                          {(post.author_name || 'LI').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-[#171321]">
+                            {post.author_name || 'LinkedIn member'}
+                          </h4>
+                          {post.author_role ? (
+                            <p className="text-xs text-[#6e687d]">{post.author_role}</p>
+                          ) : null}
+                        </div>
+                      </div>
+                      {post.post_text ? (
+                        <p className="mt-4 text-xs leading-relaxed text-[#302a42] sm:text-sm">
+                          {post.post_text}
+                        </p>
+                      ) : null}
+                      {post.course ? (
+                        <p className="mt-3 text-[11px] text-[#6e687d]">
+                          {post.course} • Easy Medical Device Academy
+                        </p>
+                      ) : null}
                     </div>
-                    <p className="mt-1 text-[11px] text-[#6e687d]">
-                      {item.course} • Easy Medical Device Academy
+                    <a
+                      href={post.linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0a66c2] hover:underline"
+                    >
+                      View on LinkedIn
+                      <ArrowRight className="size-3.5" />
+                    </a>
+                  </div>
+                ),
+              )}
+            </div>
+            </div>
+          ) : (
+            <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                {
+                  name: 'Sarah Van Der Berg',
+                  role: 'Senior Regulatory Affairs Specialist at MedTech Europe',
+                  time: 'Shared 2 days ago',
+                  course: 'EU MDR Technical Documentation Intensive',
+                  post: 'Thrilled to complete the EU MDR Technical Documentation Masterclass with Monir El Azzouzi! The GSPR mapping and notified body review logic are practical and immediate. Highly recommended for any RA team! 🚀📜 #MDR #EasyMedicalDevice',
+                  likes: 84,
+                  comments: 12,
+                },
+                {
+                  name: 'Marcus Lindqvist',
+                  role: 'Head of Quality & Compliance at Nordic Health Devices',
+                  time: 'Shared 1 week ago',
+                  course: 'ISO 13485 QMS Implementation Sprint',
+                  post: 'Proud to receive my official certificate from Easy Medical Device Academy. Practical templates, zero fluff, and clear auditor expectations. Essential training for quality managers! ⭐',
+                  likes: 112,
+                  comments: 19,
+                },
+                {
+                  name: 'Dr. Elena Rossi',
+                  role: 'Digital Health & SaMD Consultant',
+                  time: 'Shared 2 weeks ago',
+                  course: 'Software as a Medical Device (SaMD) Compliance',
+                  post: 'Just received my SaMD Compliance certification! Connecting IEC 62304 with cybersecurity and AI claims was presented with crystal clarity by Monir. Great academy! 💡',
+                  likes: 96,
+                  comments: 15,
+                },
+              ].map((item) => (
+                <div
+                  key={item.name}
+                  className="flex flex-col justify-between rounded-xl border border-[#ded6f3] bg-white p-5 shadow-sm transition hover:shadow-md"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-11 items-center justify-center rounded-full bg-[#eee8fb] font-bold text-[#6b34e9]">
+                          {item.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-[#171321]">
+                            {item.name}
+                          </h4>
+                          <p className="text-xs text-[#6e687d]">{item.role}</p>
+                          <p className="text-[11px] text-[#8e889d]">{item.time}</p>
+                        </div>
+                      </div>
+                      {/* LinkedIn icon */}
+                      <div className="flex size-7 items-center justify-center rounded bg-[#0a66c2] text-white shadow-sm">
+                        <svg
+                          className="size-4 fill-current"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64c-.92 0-1.66.74-1.66 1.66 0 .92.74 1.66 1.66 1.66.92 0 1.66-.74 1.66-1.66 0-.92-.74-1.66-1.66-1.66Z" />
+                        </svg>
+                      </div>
+                    </div>
+  
+                    <p className="mt-4 text-xs leading-relaxed text-[#302a42] sm:text-sm">
+                      {item.post}
                     </p>
+  
+                    <div className="mt-4 rounded-lg border border-[#e5def2] bg-[#fbfbfe] p-3">
+                      <div className="flex items-center gap-2">
+                        <Award className="size-4 text-[#7c3aed]" />
+                        <span className="text-xs font-semibold text-[#171321]">
+                          Verified Certificate of Completion
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-[#6e687d]">
+                        {item.course} • Easy Medical Device Academy
+                      </p>
+                    </div>
+                  </div>
+  
+                  <div className="mt-4 flex items-center justify-between border-t border-[#f0edf8] pt-3 text-xs text-[#6e687d]">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <ThumbsUp className="size-3.5 text-[#0a66c2]" />
+                      <span>{item.likes} reactions</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <MessageSquare className="size-3.5" />
+                      <span>{item.comments} comments</span>
+                    </div>
                   </div>
                 </div>
-
-                <div className="mt-4 flex items-center justify-between border-t border-[#f0edf8] pt-3 text-xs text-[#6e687d]">
-                  <div className="flex items-center gap-1.5 font-medium">
-                    <ThumbsUp className="size-3.5 text-[#0a66c2]" />
-                    <span>{item.likes} reactions</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <MessageSquare className="size-3.5" />
-                    <span>{item.comments} comments</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           <div className="mt-8 rounded-xl border border-dashed border-[#cfc4ee] bg-white/70 p-4 text-center">
             <p className="text-xs font-medium text-[#5f5872] sm:text-sm">
@@ -781,20 +945,26 @@ function CourseCard({
   course,
   pending,
   notice,
+  learnerState,
   onCheckout,
 }: {
   course: AcademyCourse;
   pending: boolean;
   notice: CheckoutNotice | null;
+  learnerState?: CourseLearnerState;
   onCheckout: (courseId: string) => void;
 }) {
+  const completed = (learnerState?.progress ?? 0) >= 100;
+  const inProgress =
+    !completed && (learnerState?.progress ?? 0) > 0 ? learnerState!.progress : 0;
+  const enrolled = Boolean(learnerState?.enrolled);
   return (
     <Card
       className="rounded-lg border-[#e4ddf4] bg-white py-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgb(38_29_68/10%)]"
       style={{ '--course-accent': course.accent } as CSSProperties}
     >
       <Link
-        href={`/academy/learn/${course.id}`}
+        href={`/academy/course/${course.id}`}
         className="group/thumb relative block aspect-[16/9] overflow-hidden rounded-t-lg bg-[#eee8ff]"
       >
         <img
@@ -808,9 +978,16 @@ function CourseCard({
             <PlayCircle className="size-7 fill-white/20" />
           </div>
         </div>
-        <Badge className="absolute left-3 top-3 bg-white text-[#201b31]">
-          {course.badge}
-        </Badge>
+        {completed ? (
+          <Badge className="absolute left-3 top-3 gap-1 bg-[#08a99f] text-white">
+            <CheckCircle2 className="size-3.5" />
+            Completed
+          </Badge>
+        ) : (
+          <Badge className="absolute left-3 top-3 bg-white text-[#201b31]">
+            {course.badge}
+          </Badge>
+        )}
         <div className="absolute bottom-3 left-3 rounded-lg bg-white/94 px-3 py-2 text-xs font-bold text-[#201b31]">
           {course.category}
         </div>
@@ -824,7 +1001,7 @@ function CourseCard({
             ({numberFormatter.format(course.students)} learners)
           </span>
         </div>
-        <Link href={`/academy/learn/${course.id}`}>
+        <Link href={`/academy/course/${course.id}`}>
           <CardTitle className="text-xl font-bold leading-snug text-[#191625] transition hover:text-[#7c3aed]">
             {course.title}
           </CardTitle>
@@ -845,10 +1022,28 @@ function CourseCard({
             {course.lessons} lessons
           </span>
         </div>
+        {completed || inProgress > 0 ? (
+          <div className="mt-4">
+            <div className="mb-1 flex justify-between text-[11px] font-bold">
+              <span className={completed ? 'text-[#067b75]' : 'text-[#6d31dc]'}>
+                {completed ? 'Course completed' : 'In progress'}
+              </span>
+              <span className="text-[#625b75]">
+                {completed ? 100 : inProgress}%
+              </span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-[#ede9fe]">
+              <div
+                className={`h-full rounded-full ${completed ? 'bg-[#08a99f]' : 'bg-[#7c3aed]'}`}
+                style={{ width: `${completed ? 100 : inProgress}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
         <ul className="mt-4 space-y-2">
-          {course.outcomes.slice(0, 2).map((outcome) => (
+          {course.outcomes.slice(0, 2).map((outcome, index) => (
             <li
-              key={outcome}
+              key={`${course.id}-outcome-${index}`}
               className="flex gap-2 text-sm leading-5 text-[#514b63]"
             >
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#08a99f]" />
@@ -867,27 +1062,47 @@ function CourseCard({
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`/academy/learn/${course.id}`}
+            href={`/academy/course/${course.id}`}
             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-[#cfc4ee] bg-white px-3.5 text-xs font-bold text-[#302945] transition hover:bg-[#f4f1ff]"
           >
             <PlayCircle className="size-4 text-[#7c3aed]" />
-            <span>Play</span>
+            <span>Details</span>
           </Link>
-          <Button
-            type="button"
-            onClick={() => onCheckout(course.id)}
-            disabled={pending}
-            className="h-10 bg-[#7c3aed] px-4 text-white hover:bg-[#6d31dc]"
-          >
-            <CreditCard className="size-4" aria-hidden="true" />
-            {pending
-              ? 'Opening...'
-              : course.price <= 0 ||
-                  course.priceLabel?.trim().toLowerCase() === 'free' ||
-                  course.priceLabel?.trim().toLowerCase() === '$0'
-                ? 'Start free'
-                : 'Enroll'}
-          </Button>
+          {enrolled ? (
+            <Link
+              href={`/academy/learn/${course.id}`}
+              className={`inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white transition ${
+                completed ? 'bg-[#08a99f] hover:bg-[#067b75]' : 'bg-[#7c3aed] hover:bg-[#6d31dc]'
+              }`}
+            >
+              {completed ? (
+                <Award className="size-4" aria-hidden="true" />
+              ) : (
+                <PlayCircle className="size-4" aria-hidden="true" />
+              )}
+              {completed ? 'View certificate' : inProgress > 0 ? 'Continue' : 'Start learning'}
+            </Link>
+          ) : (
+            <Button
+              type="button"
+              onClick={() => onCheckout(course.id)}
+              disabled={pending}
+              className="h-10 bg-[#7c3aed] px-4 text-white hover:bg-[#6d31dc]"
+            >
+              {pending ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+              ) : (
+                <CreditCard className="size-4" aria-hidden="true" />
+              )}
+              {pending
+                ? 'Opening...'
+                : course.price <= 0 ||
+                    course.priceLabel?.trim().toLowerCase() === 'free' ||
+                    course.priceLabel?.trim().toLowerCase() === '$0'
+                  ? 'Start free'
+                  : 'Enroll'}
+            </Button>
+          )}
         </div>
       </CardFooter>
 

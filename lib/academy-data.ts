@@ -86,7 +86,7 @@ export const featuredCourses: AcademyCourse[] = [
     duration: '6.5 hours',
     lessons: 42,
     rating: 4.8,
-    students: 1820,
+    students: 0,
     price: 249,
     priceLabel: '$249',
     badge: 'Bestseller',
@@ -112,7 +112,7 @@ export const featuredCourses: AcademyCourse[] = [
     duration: '5 hours',
     lessons: 31,
     rating: 4.7,
-    students: 1390,
+    students: 0,
     price: 0,
     priceLabel: 'Free',
     badge: 'Free starter',
@@ -138,7 +138,7 @@ export const featuredCourses: AcademyCourse[] = [
     duration: '4.5 hours',
     lessons: 28,
     rating: 4.9,
-    students: 860,
+    students: 0,
     price: 229,
     priceLabel: '$229',
     badge: 'New',
@@ -164,7 +164,7 @@ export const featuredCourses: AcademyCourse[] = [
     duration: '7 hours',
     lessons: 46,
     rating: 4.8,
-    students: 1240,
+    students: 0,
     price: 279,
     priceLabel: '$279',
     badge: 'Hot topic',
@@ -190,7 +190,7 @@ export const featuredCourses: AcademyCourse[] = [
     duration: '3.5 hours',
     lessons: 24,
     rating: 4.6,
-    students: 970,
+    students: 0,
     price: 189,
     priceLabel: '$189',
     badge: 'Practical',
@@ -216,7 +216,7 @@ export const featuredCourses: AcademyCourse[] = [
     duration: '4 hours',
     lessons: 26,
     rating: 4.7,
-    students: 1110,
+    students: 0,
     price: 199,
     priceLabel: '$199',
     badge: 'Launch ready',
@@ -290,7 +290,7 @@ export function mapSupabaseCourse(
     id,
     slug,
     title: row.title || fallback.title,
-    subtitle: row.subtitle || row.description || fallback.subtitle,
+    subtitle: cleanDisplayText(row.subtitle || row.description) || fallback.subtitle,
     category,
     instructor: row.instructor || fallback.instructor,
     instructorRole: row.instructor_role || fallback.instructorRole,
@@ -327,26 +327,82 @@ function normalizeOutcomes(
   value: SupabaseCourseRow['outcomes'],
   index: number,
 ) {
+  const fallback = featuredCourses[index % featuredCourses.length].outcomes;
+
   if (Array.isArray(value) && value.length) {
-    return value.slice(0, 4);
+    const cleaned = cleanOutcomeList(value);
+    return cleaned.length ? cleaned.slice(0, 4) : fallback;
   }
 
   if (typeof value === 'string' && value.trim()) {
     try {
       const parsed = JSON.parse(value);
       if (Array.isArray(parsed)) {
-        return parsed.map(String).slice(0, 4);
+        const cleaned = cleanOutcomeList(parsed);
+        return cleaned.length ? cleaned.slice(0, 4) : fallback;
       }
     } catch {
-      return value
-        .split('|')
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 4);
+      const cleaned = cleanOutcomeList(value.split(/\r?\n|\|/));
+      return cleaned.length ? cleaned.slice(0, 4) : fallback;
     }
   }
 
-  return featuredCourses[index % featuredCourses.length].outcomes;
+  return fallback;
+}
+
+function cleanOutcomeList(values: unknown[]) {
+  const seen = new Set<string>();
+  return values
+    .map((item) => cleanDisplayText(String(item || '')))
+    .filter((item) => {
+      if (!item) return false;
+      if (/learning outcomes\s*\(one key skill per line\)/i.test(item)) return false;
+
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function cleanDisplayText(value?: string | null) {
+  if (!value) return '';
+
+  let text = String(value).trim();
+
+  try {
+    const parsed = JSON.parse(text);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      ('passingScore' in parsed ||
+        'certificateTitle' in parsed ||
+        'certificateEnabled' in parsed ||
+        'linkedinShareEnabled' in parsed)
+    ) {
+      return '';
+    }
+  } catch {
+    // Not a pure JSON value.
+  }
+
+  return text
+    .replace(
+      /^\s*\{(?=[\s\S]*?(passingScore|certificateTitle|certificateEnabled|linkedinShareEnabled))[\s\S]*?\}\s*/i,
+      '',
+    )
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/(p|div|h[1-6]|li|ul|ol)>/gi, ' ')
+    .replace(/<li[^>]*>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function slugify(value: string) {

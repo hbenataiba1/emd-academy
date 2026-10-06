@@ -1,11 +1,12 @@
 import {
-  academyRestFetch,
   cleanEnv,
   getAcademyCourseForAccess,
   getAcademyDisplayName,
   getAcademyUserFromRequest,
   isFreeCourse,
   json,
+  saveAcademyEnrollment,
+  explainSupabaseEnrollmentError,
 } from '@/lib/academy-auth';
 
 type CheckoutBody = {
@@ -31,22 +32,26 @@ export async function POST(request: Request) {
   }
 
   if (isFreeCourse(course)) {
-    const now = new Date().toISOString();
-    await academyRestFetch('enrollments?on_conflict=user_id,course_id', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: user.id,
-        learner_email: user.email,
-        learner_name: getAcademyDisplayName(user),
-        course_id: course.id,
-        amount_cents: 0,
+    try {
+      await saveAcademyEnrollment({
+        userId: user.id,
+        learnerEmail: user.email,
+        learnerName: getAcademyDisplayName(user),
+        courseId: course.id,
+        amountCents: 0,
         currency: 'usd',
         status: 'active',
-        updated_at: now,
-      }),
-      prefer: 'resolution=merge-duplicates,return=minimal',
-      useServiceRole: true,
-    });
+      });
+    } catch (error) {
+      return json(
+        {
+          message: explainSupabaseEnrollmentError(
+            error instanceof Error ? error.message : '',
+          ),
+        },
+        502,
+      );
+    }
 
     const siteUrl = cleanEnv(process.env.NEXT_PUBLIC_SITE_URL);
     const origin = siteUrl || new URL(request.url).origin;
@@ -199,21 +204,15 @@ async function savePendingEnrollment({
   }
 
   try {
-    await academyRestFetch('enrollments?on_conflict=user_id,course_id', {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: userId,
-        learner_email: learnerEmail,
-        learner_name: learnerName,
-        course_id: courseId,
-        amount_cents: amountCents,
-        currency: 'usd',
-        stripe_checkout_session_id: checkoutSessionId,
-        status: 'pending_payment',
-        updated_at: new Date().toISOString(),
-      }),
-      prefer: 'resolution=merge-duplicates,return=minimal',
-      useServiceRole: true,
+    await saveAcademyEnrollment({
+      userId,
+      learnerEmail,
+      learnerName,
+      courseId,
+      amountCents,
+      currency: 'usd',
+      stripeCheckoutSessionId: checkoutSessionId,
+      status: 'pending_payment',
     });
   } catch {
     // Checkout should still open if reporting is temporarily unavailable.

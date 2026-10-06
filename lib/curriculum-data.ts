@@ -1,5 +1,6 @@
 export type LessonResource = {
   name: string;
+  url?: string;
   size: string;
   type: string;
 };
@@ -17,6 +18,7 @@ export type CourseLesson = {
   durationSeconds: number;
   type: 'video' | 'article' | 'quiz' | 'template';
   completed?: boolean;
+  previewEnabled?: boolean;
   videoUrl?: string;
   subtitleSummary?: string;
   description: string;
@@ -49,9 +51,9 @@ export const defaultCourseCurriculums: Record<string, CourseCurriculum> = {
     title: 'EU MDR Technical File Masterclass (2026) - GSPR, Clinical & Notified Body Audit Readiness',
     instructor: 'Monir El Azzouzi',
     instructorRole: 'Founder & CEO Easy Medical Device, Lead Regulatory Consultant',
-    rating: 4.9,
-    ratingCount: 1820,
-    studentCount: 3450,
+    rating: 5.0,
+    ratingCount: 0,
+    studentCount: 0,
     lastUpdated: 'February 2026',
     totalDuration: '6.5 hours',
     sections: [
@@ -280,9 +282,9 @@ export function getCurriculumForCourse(courseIdOrSlug?: string): CourseCurriculu
     title: `${cleanTitle} (2026 Masterclass)`,
     instructor: 'Monir El Azzouzi',
     instructorRole: 'Founder & CEO Easy Medical Device, Lead Regulatory Consultant',
-    rating: 4.8,
-    ratingCount: 1240,
-    studentCount: 2850,
+    rating: 5.0,
+    ratingCount: 0,
+    studentCount: 0,
     lastUpdated: 'February 2026',
     totalDuration: '5.5 hours',
     sections: [
@@ -370,4 +372,3 @@ export function getCurriculumForCourse(courseIdOrSlug?: string): CourseCurriculu
     ],
   };
 }
-

@@ -1,10 +1,13 @@
 import {
   academyRestFetch,
+  getAcademyEnrollmentForUser,
+  getAcademyCourseForAccess,
   getAcademyUserFromRequest,
+  isFreeCourse,
   json,
   readJson,
 } from '@/lib/academy-auth';
-import { getCurriculumForCourse } from '@/lib/curriculum-data';
+import { getLessonsForCourse } from '@/lib/academy-lessons';
 
 type ProgressBody = {
   courseId?: string;
@@ -29,16 +32,17 @@ export async function POST(request: Request) {
     return json({ message: 'Missing course or lesson.' }, 400);
   }
 
-  const enrollmentResponse = await academyRestFetch(
-    `enrollments?select=id,status&user_id=eq.${encodeURIComponent(user.id)}&course_id=eq.${encodeURIComponent(body.courseId)}&limit=1`,
-    { useServiceRole: true },
-  );
-  const enrollment = enrollmentResponse.ok
-    ? ((await enrollmentResponse.json()) as { status?: string }[])
-    : [];
+  const enrollment = await getAcademyEnrollmentForUser({
+    userId: user.id,
+    learnerEmail: user.email,
+    courseId: body.courseId,
+  });
 
-  if (!['active', 'completed'].includes(enrollment[0]?.status || '')) {
-    return json({ message: 'Enroll in this course before saving progress.' }, 403);
+  if (!['active', 'completed'].includes(enrollment?.status || '')) {
+    const course = await getAcademyCourseForAccess(body.courseId);
+    if (!course || !isFreeCourse(course)) {
+      return json({ message: 'Enroll in this course before saving progress.' }, 403);
+    }
   }
 
   const completed = body.completed !== false;
@@ -47,26 +51,25 @@ export async function POST(request: Request) {
     Math.min(100, Math.round(body.progressPercent ?? (completed ? 100 : 0))),
   );
 
-  const response = await academyRestFetch(
-    'lesson_progress?on_conflict=user_id,course_id,lesson_id',
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        user_id: user.id,
-        learner_email: user.email,
-        course_id: body.courseId,
-        lesson_id: body.lessonId,
-        completed,
-        progress_percent: progressPercent,
-        last_accessed_at: new Date().toISOString(),
-      }),
-      prefer: 'resolution=merge-duplicates,return=representation',
-      useServiceRole: true,
-    },
-  );
-
-  if (!response.ok) {
-    return json({ message: await response.text() }, 502);
+  try {
+    await saveLessonProgress({
+      userId: user.id,
+      learnerEmail: user.email,
+      courseId: body.courseId,
+      lessonId: body.lessonId,
+      completed,
+      progressPercent,
+    });
+  } catch (error) {
+    return json(
+      {
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Progress could not be saved.',
+      },
+      502,
+    );
   }
 
   const certificate = await maybeIssueCertificate(user.id, body.courseId);
@@ -74,10 +77,69 @@ export async function POST(request: Request) {
   return json({ saved: true, certificate });
 }
 
+async function saveLessonProgress({
+  userId,
+  learnerEmail,
+  courseId,
+  lessonId,
+  completed,
+  progressPercent,
+}: {
+  userId: string;
+  learnerEmail: string;
+  courseId: string;
+  lessonId: string;
+  completed: boolean;
+  progressPercent: number;
+}) {
+  const now = new Date().toISOString();
+  const modernResponse = await academyRestFetch(
+    'lesson_progress?on_conflict=user_id,course_id,lesson_id',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        learner_email: learnerEmail,
+        course_id: courseId,
+        lesson_id: lessonId,
+        completed,
+        progress_percent: progressPercent,
+        last_accessed_at: now,
+        updated_at: now,
+      }),
+      prefer: 'resolution=merge-duplicates,return=representation',
+      useServiceRole: true,
+    },
+  );
+
+  if (modernResponse.ok) {
+    return;
+  }
+
+  const legacyResponse = await academyRestFetch(
+    'lesson_progress?on_conflict=learner_email,course_id,lesson_id',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        learner_email: learnerEmail,
+        course_id: courseId,
+        lesson_id: lessonId,
+        completed,
+        progress_percent: progressPercent,
+        last_accessed_at: now,
+      }),
+      prefer: 'resolution=merge-duplicates,return=representation',
+      useServiceRole: true,
+    },
+  );
+
+  if (!legacyResponse.ok) {
+    throw new Error(await legacyResponse.text());
+  }
+}
+
 async function maybeIssueCertificate(userId: string, courseId: string) {
-  const curriculum = getCurriculumForCourse(courseId);
-  const totalLessons = curriculum.sections.flatMap((section) => section.lessons)
-    .length;
+  const totalLessons = (await getLessonsForCourse(courseId)).length;
 
   if (!totalLessons) {
     return null;

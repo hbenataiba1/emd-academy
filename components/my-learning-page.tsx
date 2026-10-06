@@ -9,10 +9,12 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Download,
   GraduationCap,
   LayoutDashboard,
   LogOut,
   PlayCircle,
+  Share2,
   Trophy,
 } from 'lucide-react';
 
@@ -25,6 +27,12 @@ import {
   getStoredAcademySession,
   type AcademySession,
 } from '@/lib/academy-session';
+import { getStoredLearningCourses } from '@/lib/academy-learning-state';
+import {
+  downloadCertificatePdf,
+  formatCertificateDate,
+  openLinkedInCertificate,
+} from '@/lib/academy-certificate';
 
 type LearningCourse = {
   id: string;
@@ -53,6 +61,57 @@ type LearningPayload = {
   courses?: LearningCourse[];
   message?: string;
 };
+
+function getLocalLearningCourses(): LearningCourse[] {
+  return getStoredLearningCourses().map((course) => {
+    const completedLessons = course.completedLessonIds.length;
+    const totalLessons = Math.max(course.lessons || 1, completedLessons || 1);
+    const progress =
+      totalLessons > 0
+        ? Math.min(100, Math.round((completedLessons / totalLessons) * 100))
+        : 0;
+
+    return {
+      id: course.id,
+      title: course.title,
+      instructor: course.instructor,
+      category: course.category,
+      lessons: totalLessons,
+      completedLessons,
+      progress,
+      lastLesson: progress === 100 ? 'Completed' : course.lastLessonTitle,
+      image: course.image,
+      accent: course.accent,
+      status: progress === 100 ? 'completed' : 'active',
+    };
+  });
+}
+
+function mergeLearningCourses(
+  remoteCourses: LearningCourse[] = [],
+  localCourses: LearningCourse[] = [],
+) {
+  const map = new Map<string, LearningCourse>();
+  remoteCourses.forEach((course) => map.set(course.id, course));
+
+  localCourses.forEach((course) => {
+    const existing = map.get(course.id);
+    if (!existing) {
+      map.set(course.id, course);
+      return;
+    }
+
+    map.set(course.id, {
+      ...existing,
+      completedLessons: Math.max(existing.completedLessons, course.completedLessons),
+      progress: Math.max(existing.progress, course.progress),
+      lastLesson: existing.lastLesson || course.lastLesson,
+      status: existing.status || course.status,
+    });
+  });
+
+  return [...map.values()];
+}
 
 function ProgressRing({
   pct,
@@ -101,8 +160,32 @@ function ProgressRing({
   );
 }
 
-function CourseCard({ course }: { course: LearningCourse }) {
+function CourseCard({
+  course,
+  learnerName,
+  userId,
+}: {
+  course: LearningCourse;
+  learnerName: string;
+  userId?: string;
+}) {
   const done = course.progress === 100;
+  const certificateTitle = 'Certificate of Completion';
+  const certificateNumber =
+    course.certificate?.certificate_number ||
+    `EMDA-${new Date().getFullYear()}-${course.id.slice(0, 4).toUpperCase()}-${(userId || 'ACADEMY').slice(0, 8).toUpperCase()}`;
+  const issuedAt = course.certificate?.issued_at;
+
+  const downloadCertificate = () =>
+    downloadCertificatePdf({
+      learnerName,
+      courseTitle: course.title,
+      certificateTitle,
+      certificateNumber,
+      issuedDate: formatCertificateDate(issuedAt),
+    });
+  const shareCertificate = () =>
+    openLinkedInCertificate({ certificateTitle, certificateNumber, issuedAt });
   return (
     <div className="group flex flex-col overflow-hidden rounded-lg border border-[#ede9fe] bg-white transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="relative h-40 overflow-hidden bg-[#f4f0ff]">
@@ -166,9 +249,33 @@ function CourseCard({ course }: { course: LearningCourse }) {
             Next: {course.lastLesson}
           </p>
         ) : null}
-        {course.certificate ? (
-          <div className="rounded-lg border border-[#bdeee9] bg-[#effbf9] px-3 py-2 text-xs font-semibold text-[#067b75]">
-            Certificate {course.certificate.certificate_number}
+        {done ? (
+          <div className="rounded-lg border border-[#bdeee9] bg-[#effbf9] p-3">
+            <p className="flex items-center gap-1.5 text-xs font-bold text-[#067b75]">
+              <Award className="size-4" />
+              Certificate ready
+            </p>
+            <p className="mt-0.5 truncate font-mono text-[11px] text-[#3f8f8a]">
+              {certificateNumber}
+            </p>
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={downloadCertificate}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[#067b75] px-2 py-2 text-xs font-bold text-white transition hover:bg-[#056560]"
+              >
+                <Download className="size-3.5" />
+                Download
+              </button>
+              <button
+                type="button"
+                onClick={shareCertificate}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[#0a66c2] px-2 py-2 text-xs font-bold text-white transition hover:bg-[#004182]"
+              >
+                <Share2 className="size-3.5" />
+                LinkedIn
+              </button>
+            </div>
           </div>
         ) : null}
         <Link
@@ -203,12 +310,14 @@ export default function MyLearningPage() {
       return;
     }
 
+    const activeSession = storedSession;
     let cancelled = false;
 
     async function loadLearning() {
+      const localCourses = getLocalLearningCourses();
       try {
         const response = await fetch('/api/academy/me', {
-          headers: getAcademyAuthHeader(storedSession),
+          headers: getAcademyAuthHeader(activeSession),
         });
         const nextPayload = (await response.json()) as LearningPayload;
 
@@ -221,14 +330,41 @@ export default function MyLearningPage() {
         }
 
         if (!response.ok) {
-          setMessage(nextPayload.message || 'Could not load your learning.');
+          setMessage(
+            localCourses.length
+              ? null
+              : nextPayload.message || 'Could not load your learning.',
+          );
+          setPayload({
+            user: {
+              id: activeSession.user.id,
+              email: activeSession.user.email || '',
+              name: getAcademyDisplayName(activeSession),
+            },
+            courses: localCourses,
+          });
           return;
         }
 
-        setPayload(nextPayload);
+        setPayload({
+          ...nextPayload,
+          courses: mergeLearningCourses(nextPayload.courses, localCourses),
+        });
       } catch {
         if (!cancelled) {
-          setMessage('Could not load your learning right now.');
+          setMessage(
+            localCourses.length
+              ? null
+              : 'Could not load your learning right now.',
+          );
+          setPayload({
+            user: {
+              id: activeSession.user.id,
+              email: activeSession.user.email || '',
+              name: getAcademyDisplayName(activeSession),
+            },
+            courses: localCourses,
+          });
         }
       }
     }
@@ -399,6 +535,8 @@ export default function MyLearningPage() {
             icon={PlayCircle}
             badge={inProgress.length}
             courses={inProgress}
+            learnerName={displayName}
+            userId={payload?.user?.id || session?.user.id}
           />
         ) : null}
 
@@ -408,6 +546,8 @@ export default function MyLearningPage() {
             icon={CheckCircle2}
             badge={completed.length}
             courses={completed}
+            learnerName={displayName}
+            userId={payload?.user?.id || session?.user.id}
           />
         ) : null}
 
@@ -417,6 +557,8 @@ export default function MyLearningPage() {
             icon={BookOpen}
             badge={notStarted.length}
             courses={notStarted}
+            learnerName={displayName}
+            userId={payload?.user?.id || session?.user.id}
           />
         ) : null}
 
@@ -439,29 +581,6 @@ export default function MyLearningPage() {
             </Link>
           </div>
         ) : null}
-
-        {completed.length > 0 ? (
-          <section className="flex flex-col items-center justify-between gap-6 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#4f46e5] p-6 text-white sm:flex-row">
-            <div className="flex items-center gap-4">
-              <Award className="size-10 shrink-0 text-yellow-300" />
-              <div>
-                <h3 className="text-lg font-black">
-                  Your certificate is ready
-                </h3>
-                <p className="mt-1 text-sm text-white/80">
-                  Completion certificates appear here as soon as all lessons in a
-                  course are marked complete.
-                </p>
-              </div>
-            </div>
-            <Link
-              href={`/academy/learn/${completed[0].id}`}
-              className="shrink-0 rounded-lg bg-white px-5 py-2.5 text-sm font-semibold text-[#7c3aed] transition hover:bg-[#ede9fe]"
-            >
-              Review completed course
-            </Link>
-          </section>
-        ) : null}
       </main>
 
       <AcademyFooter />
@@ -474,11 +593,15 @@ function LearningSection({
   icon: Icon,
   badge,
   courses,
+  learnerName,
+  userId,
 }: {
   title: string;
   icon: typeof PlayCircle;
   badge: number;
   courses: LearningCourse[];
+  learnerName: string;
+  userId?: string;
 }) {
   return (
     <section>
@@ -491,7 +614,12 @@ function LearningSection({
       </div>
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {courses.map((course) => (
-          <CourseCard key={course.id} course={course} />
+          <CourseCard
+            key={course.id}
+            course={course}
+            learnerName={learnerName}
+            userId={userId}
+          />
         ))}
       </div>
     </section>

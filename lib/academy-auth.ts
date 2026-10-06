@@ -11,6 +11,35 @@ export type AcademyAuthUser = {
   user_metadata?: Record<string, unknown>;
 };
 
+export type AcademyEnrollmentRow = {
+  id?: string;
+  user_id?: string;
+  course_id: string;
+  learner_email?: string;
+  learner_name?: string;
+  amount_cents?: number;
+  currency?: string;
+  stripe_checkout_session_id?: string;
+  stripe_customer_id?: string;
+  status?: string;
+  completed_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type SaveAcademyEnrollmentInput = {
+  userId: string;
+  learnerEmail: string;
+  learnerName?: string;
+  courseId: string;
+  amountCents?: number;
+  currency?: string;
+  stripeCheckoutSessionId?: string;
+  stripeCustomerId?: string | null;
+  status?: string;
+  completedAt?: string | null;
+};
+
 export type AcademySupabaseConfig = {
   url: string;
   anonKey: string;
@@ -160,5 +189,186 @@ export function isFreeCourse(course: AcademyCourse) {
     course.price <= 0 ||
     course.priceLabel?.trim().toLowerCase() === 'free' ||
     course.priceLabel?.trim().toLowerCase() === '$0'
+  );
+}
+
+export async function getAcademyEnrollmentForUser({
+  userId,
+  learnerEmail,
+  courseId,
+}: {
+  userId: string;
+  learnerEmail: string;
+  courseId: string;
+}) {
+  const modernResponse = await academyRestFetch(
+    `enrollments?select=*&user_id=eq.${encodeURIComponent(userId)}&course_id=eq.${encodeURIComponent(courseId)}&limit=1`,
+    { useServiceRole: true },
+  );
+
+  if (modernResponse.ok) {
+    const rows = (await modernResponse.json()) as AcademyEnrollmentRow[];
+    if (rows.length > 0) {
+      return rows[0];
+    }
+  }
+
+  const emailResponse = await academyRestFetch(
+    `enrollments?select=*&learner_email=eq.${encodeURIComponent(learnerEmail)}&course_id=eq.${encodeURIComponent(courseId)}&limit=1`,
+    { useServiceRole: true },
+  );
+
+  if (!emailResponse.ok) {
+    return null;
+  }
+
+  const rows = (await emailResponse.json()) as AcademyEnrollmentRow[];
+  return rows[0] || null;
+}
+
+export async function getAcademyEnrollmentsForUser({
+  userId,
+  learnerEmail,
+}: {
+  userId: string;
+  learnerEmail: string;
+}) {
+  const byUserId = await academyRestFetch(
+    `enrollments?select=*&user_id=eq.${encodeURIComponent(userId)}&order=updated_at.desc`,
+    { useServiceRole: true },
+  );
+
+  if (byUserId.ok) {
+    const rows = (await byUserId.json()) as AcademyEnrollmentRow[];
+    if (rows.length > 0) {
+      return rows;
+    }
+  }
+
+  const byEmail = await academyRestFetch(
+    `enrollments?select=*&learner_email=eq.${encodeURIComponent(learnerEmail)}&order=updated_at.desc`,
+    { useServiceRole: true },
+  );
+
+  if (!byEmail.ok) {
+    throw new Error(await byEmail.text());
+  }
+
+  return (await byEmail.json()) as AcademyEnrollmentRow[];
+}
+
+export async function saveAcademyEnrollment({
+  userId,
+  learnerEmail,
+  learnerName,
+  courseId,
+  amountCents = 0,
+  currency = 'usd',
+  stripeCheckoutSessionId,
+  stripeCustomerId,
+  status = 'active',
+  completedAt,
+}: SaveAcademyEnrollmentInput) {
+  const now = new Date().toISOString();
+  const modernPayload = removeUndefinedValues({
+    user_id: userId,
+    learner_email: learnerEmail,
+    learner_name: learnerName,
+    course_id: courseId,
+    amount_cents: amountCents,
+    currency,
+    stripe_checkout_session_id: stripeCheckoutSessionId,
+    stripe_customer_id: stripeCustomerId,
+    status,
+    completed_at: completedAt,
+    updated_at: now,
+  });
+
+  const modernResponse = await academyRestFetch(
+    'enrollments?on_conflict=user_id,course_id',
+    {
+      method: 'POST',
+      body: JSON.stringify(modernPayload),
+      prefer: 'resolution=merge-duplicates,return=representation',
+      useServiceRole: true,
+    },
+  );
+
+  if (modernResponse.ok) {
+    return (await modernResponse.json().catch(() => null)) as
+      | AcademyEnrollmentRow[]
+      | null;
+  }
+
+  const modernError = await modernResponse.text();
+  const legacyPayload = removeUndefinedValues({
+    learner_email: learnerEmail,
+    learner_name: learnerName,
+    course_id: courseId,
+    amount_cents: amountCents,
+    currency,
+    stripe_checkout_session_id: stripeCheckoutSessionId,
+    stripe_customer_id: stripeCustomerId,
+    status,
+    completed_at: completedAt,
+    updated_at: now,
+  });
+
+  const existing = await getAcademyEnrollmentForUser({
+    userId,
+    learnerEmail,
+    courseId,
+  });
+
+  if (existing?.id) {
+    const patchResponse = await academyRestFetch(
+      `enrollments?id=eq.${encodeURIComponent(existing.id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(legacyPayload),
+        prefer: 'return=representation',
+        useServiceRole: true,
+      },
+    );
+
+    if (patchResponse.ok) {
+      return (await patchResponse.json().catch(() => null)) as
+        | AcademyEnrollmentRow[]
+        | null;
+    }
+  }
+
+  const legacyResponse = await academyRestFetch('enrollments', {
+    method: 'POST',
+    body: JSON.stringify(legacyPayload),
+    prefer: 'return=representation',
+    useServiceRole: true,
+  });
+
+  if (!legacyResponse.ok) {
+    const legacyError = await legacyResponse.text();
+    throw new Error(explainSupabaseEnrollmentError(legacyError || modernError));
+  }
+
+  return (await legacyResponse.json().catch(() => null)) as
+    | AcademyEnrollmentRow[]
+    | null;
+}
+
+export function explainSupabaseEnrollmentError(errorText: string) {
+  if (/violates foreign key constraint/i.test(errorText)) {
+    return 'This course must be published in the Academy Supabase courses table before enrollment is available.';
+  }
+
+  if (/Could not find|schema cache|column/i.test(errorText)) {
+    return 'The Academy Supabase enrollment table needs the latest schema or compatibility fields.';
+  }
+
+  return errorText || 'Enrollment could not be saved. Check the Academy Supabase schema.';
+}
+
+function removeUndefinedValues<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
   );
 }
