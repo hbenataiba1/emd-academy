@@ -1,5 +1,10 @@
+import type { Metadata } from 'next';
 import { CoursePlayer } from '@/components/course-player';
 import { getAcademyCourseForAccess, isFreeCourse } from '@/lib/academy-auth';
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 type LearnCoursePageProps = {
   params: Promise<{
