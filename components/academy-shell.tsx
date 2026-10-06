@@ -230,7 +230,7 @@ export function AcademyHeader({
       <header className="relative z-50 border-b border-[#ded6f3]/60 bg-[#f8f6ff]">
       <div className="mx-auto grid min-h-[92px] max-w-[1380px] grid-cols-[1fr_auto] items-center gap-4 px-4 sm:px-6 lg:min-h-[112px] lg:grid-cols-[150px_1fr_260px] lg:px-8">
         <a href="https://easymedicaldevice.com/" aria-label="Easy Medical Device home" className="flex w-fit items-center">
-          <img src="/easy-medical-device-logo.png" alt="Easy Medical Device" className="size-[76px] object-contain lg:size-[92px]" />
+          <img src="/academy/easy-medical-device-logo.png" alt="Easy Medical Device" className="size-[76px] object-contain lg:size-[92px]" />
         </a>
 
         {/* Desktop nav */}
@@ -706,7 +706,7 @@ export function AcademyFooter() {
           <div>
             <a href="/academy" aria-label="Easy Medical Device Academy">
               <img
-                src="/easy-medical-device-logo.png"
+                src="/academy/easy-medical-device-logo.png"
                 alt="Easy Medical Device"
                 className="size-20 object-contain"
               />

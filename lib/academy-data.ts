@@ -297,8 +297,8 @@ export function mapSupabaseCourse(
     level: row.level || fallback.level,
     duration: row.duration || fallback.duration,
     lessons: row.lesson_count || row.lessons || fallback.lessons,
-    rating: typeof row.rating === 'number' ? row.rating : fallback.rating,
-    students: row.learner_count || row.students || fallback.students,
+    rating: typeof row.rating === 'number' ? row.rating : 0,
+    students: row.learner_count || row.students || 0,
     price,
     priceLabel: row.price_label || `$${price}`,
     badge: row.badge || fallback.badge,
@@ -327,7 +327,7 @@ function normalizeOutcomes(
   value: SupabaseCourseRow['outcomes'],
   index: number,
 ) {
-  const fallback = featuredCourses[index % featuredCourses.length].outcomes;
+  const fallback: string[] = [];
 
   if (Array.isArray(value) && value.length) {
     const cleaned = cleanOutcomeList(value);

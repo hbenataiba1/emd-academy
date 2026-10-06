@@ -336,14 +336,18 @@ export function CourseDetailPage({
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-4 text-sm font-semibold text-[#514b63]">
-              <span className="inline-flex items-center gap-1.5">
-                <Star className="size-4 fill-[#f6b44b] text-[#f6b44b]" />
-                {course.rating.toFixed(1)} rating
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <UserRound className="size-4 text-[#7c3aed]" />
-                {numberFormatter.format(course.students)} learners
-              </span>
+              {course.rating > 0 ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Star className="size-4 fill-[#f6b44b] text-[#f6b44b]" />
+                  {course.rating.toFixed(1)} rating
+                </span>
+              ) : null}
+              {course.students > 0 ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <UserRound className="size-4 text-[#7c3aed]" />
+                  {numberFormatter.format(course.students)} learners
+                </span>
+              ) : null}
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="size-4 text-[#7c3aed]" />
                 {course.duration}

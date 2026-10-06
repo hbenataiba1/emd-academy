@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   title: 'Easy Medical Device Academy',
   description:
     'Online medical device compliance courses for MDR, IVDR, ISO 13485, SaMD, risk management, and market access.',
+  twitter: { card: 'summary_large_image' },
   openGraph: {
     title: 'Easy Medical Device Academy',
     description:

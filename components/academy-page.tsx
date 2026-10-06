@@ -362,7 +362,7 @@ export function AcademyPage({
             {/* Main photo */}
             <div className="relative overflow-hidden rounded-2xl shadow-[0_32px_80px_rgb(35_28_61/18%)]">
               <img
-                src="/learn.jpg"
+                src="/academy/learn.jpg"
                 alt="Medical device compliance learning"
                 className="h-full w-full object-cover"
               />
@@ -478,10 +478,14 @@ export function AcademyPage({
         {!filteredCourses.length ? (
           <div className="mt-7 rounded-lg border border-[#e4ddf4] bg-white p-8 text-center">
             <h3 className="text-lg font-bold text-[#191625]">
-              No courses match that search
+              {initialCourses.length
+                ? 'No courses match that search'
+                : 'New courses are coming soon'}
             </h3>
             <p className="mt-2 text-sm text-[#625b75]">
-              Try a different regulatory topic or view all courses.
+              {initialCourses.length
+                ? 'Try a different regulatory topic or view all courses.'
+                : 'We are preparing our first medical device compliance courses. Check back shortly.'}
             </p>
           </div>
         ) : null}
@@ -602,7 +606,7 @@ export function AcademyPage({
             <div className="flex items-center justify-center bg-[#f4f0ff] p-8 lg:col-span-4">
               <div className="overflow-hidden rounded-2xl shadow-lg max-w-[260px] w-full">
                 <img
-                  src="/monir-el-azzouzi-founder-ceo.jpg"
+                  src="/academy/monir-el-azzouzi-founder-ceo.jpg"
                   alt="Monir El Azzouzi - Founder & CEO Easy Medical Device"
                   className="w-full object-cover object-top transition duration-500 hover:scale-105"
                 />
@@ -964,7 +968,7 @@ function CourseCard({
       style={{ '--course-accent': course.accent } as CSSProperties}
     >
       <Link
-        href={`/academy/course/${course.id}`}
+        href={`/academy/course/${course.slug || course.id}`}
         className="group/thumb relative block aspect-[16/9] overflow-hidden rounded-t-lg bg-[#eee8ff]"
       >
         <img
@@ -995,13 +999,19 @@ function CourseCard({
 
       <CardHeader className="p-5 pb-3">
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#6d31dc]">
-          <Star className="size-4 fill-[#f6b44b] text-[#f6b44b]" />
-          <span>{course.rating.toFixed(1)}</span>
-          <span className="text-[#8b849a]">
-            ({numberFormatter.format(course.students)} learners)
-          </span>
+          {course.rating > 0 ? (
+            <>
+              <Star className="size-4 fill-[#f6b44b] text-[#f6b44b]" />
+              <span>{course.rating.toFixed(1)}</span>
+            </>
+          ) : null}
+          {course.students > 0 ? (
+            <span className="text-[#8b849a]">
+              ({numberFormatter.format(course.students)} learners)
+            </span>
+          ) : null}
         </div>
-        <Link href={`/academy/course/${course.id}`}>
+        <Link href={`/academy/course/${course.slug || course.id}`}>
           <CardTitle className="text-xl font-bold leading-snug text-[#191625] transition hover:text-[#7c3aed]">
             {course.title}
           </CardTitle>
@@ -1062,7 +1072,7 @@ function CourseCard({
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`/academy/course/${course.id}`}
+            href={`/academy/course/${course.slug || course.id}`}
             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-[#cfc4ee] bg-white px-3.5 text-xs font-bold text-[#302945] transition hover:bg-[#f4f1ff]"
           >
             <PlayCircle className="size-4 text-[#7c3aed]" />

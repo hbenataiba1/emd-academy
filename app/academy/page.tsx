@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 
+import { JsonLd } from '@/components/json-ld';
 import { AcademyPage } from '@/components/academy-page';
-import { featuredCourses } from '@/lib/academy-data';
 import { getPublishedCommunityPosts } from '@/lib/community-posts';
+import { ACADEMY_URL, SITE_URL } from '@/lib/site';
 import { getPublishedCoursesFromSupabase } from '@/lib/supabase';
 
 export const metadata: Metadata = {
@@ -17,7 +18,33 @@ export default async function AcademyRoute() {
     getPublishedCoursesFromSupabase(),
     getPublishedCommunityPosts(),
   ]);
-  const courses = supabaseCourses?.length ? supabaseCourses : featuredCourses;
+  const courses = supabaseCourses ?? [];
 
-  return <AcademyPage initialCourses={courses} communityPosts={communityPosts} />;
+  return (
+    <>
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            {
+              '@type': 'EducationalOrganization',
+              name: 'Easy Medical Device Academy',
+              url: ACADEMY_URL,
+              parentOrganization: { '@type': 'Organization', name: 'Easy Medical Device', url: SITE_URL },
+            },
+            {
+              '@type': 'ItemList',
+              itemListElement: courses.map((course, index) => ({
+                '@type': 'ListItem',
+                position: index + 1,
+                url: `${ACADEMY_URL}/course/${course.slug || course.id}`,
+                name: course.title,
+              })),
+            },
+          ],
+        }}
+      />
+      <AcademyPage initialCourses={courses} communityPosts={communityPosts} />
+    </>
+  );
 }
