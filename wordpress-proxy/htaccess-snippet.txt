@@ -1,0 +1,10 @@
+# Add this block at the TOP of the WordPress .htaccess (public_html/.htaccess),
+# ABOVE the "# BEGIN WordPress" line.
+
+# BEGIN Academy proxy
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteRule ^(academy|academy-assets|api/academy|api/checkout)(/.*)?$ /academy-proxy.php [L]
+</IfModule>
+# END Academy proxy
