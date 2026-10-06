@@ -346,11 +346,11 @@ export function AcademyPage({
                 <GraduationCap className="size-4" aria-hidden="true" />
               </a>
               <Link
-                href="/academy/learn"
+                href="/academy/signup?next=/academy/my-learning"
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#cfc4ee] bg-white px-5 text-sm font-bold text-[#302945] transition hover:bg-[#f4f1ff]"
               >
                 <PlayCircle className="size-4 text-[#7c3aed]" aria-hidden="true" />
-                Launch Course Player
+                Start learning
               </Link>
             </div>
 

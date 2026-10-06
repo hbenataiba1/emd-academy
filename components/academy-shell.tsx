@@ -574,7 +574,7 @@ export function AcademyHeader({
                 </Link>
               ) : (
                 <Link
-                  href="/academy/learn"
+                  href="/academy/signup?next=/academy/my-learning"
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#7c3aed] px-3.5 text-sm font-semibold text-white transition hover:bg-[#6d31dc] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#7c3aed]/20"
                 >
                   Start learning
