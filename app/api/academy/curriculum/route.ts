@@ -53,6 +53,12 @@ export async function GET(request: Request) {
                   url: r.url || '#',
                   size: r.size || 'File',
                   type: r.type || 'Document',
+                  ...(r.type === 'promo'
+                    ? {
+                        description: r.description || '',
+                        ctaLabel: r.cta_label || '',
+                      }
+                    : {}),
                 }))
               : [],
           });

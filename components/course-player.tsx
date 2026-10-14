@@ -37,9 +37,7 @@ import {
   RotateCcw,
   RotateCw,
   Search,
-  Send,
   Share2,
-  Sparkles,
   Star,
   Subtitles,
   ThumbsUp,
@@ -56,6 +54,10 @@ import {
   type CourseSection,
   getCurriculumForCourse,
 } from '@/lib/curriculum-data';
+import { useCertificatePreviewUrl } from '@/lib/use-certificate-preview';
+import { LessonPromoCard } from '@/components/lesson-promo-card';
+import { LessonResourceCard } from '@/components/lesson-resource-card';
+import { prepareArticleHtml } from '@/lib/article-html';
 import {
   getAcademyDisplayName,
   getAcademyAuthHeader,
@@ -68,7 +70,6 @@ import {
   saveStoredLessonProgress,
 } from '@/lib/academy-learning-state';
 import {
-  buildCertificateSvg,
   downloadCertificatePdf,
   formatCertificateDate,
   openLinkedInCertificate as shareCertificateOnLinkedIn,
@@ -282,10 +283,24 @@ export function CoursePlayer({
   const visibleResources = useMemo(
     () =>
       (activeLesson?.resources || []).filter(
-        (resource) => resource.type !== 'quiz_question',
+        (resource) => resource.type !== 'quiz_question' && resource.type !== 'promo',
       ),
     [activeLesson],
   );
+  const activePromo = useMemo(() => {
+    const promo = (activeLesson?.resources || []).find(
+      (resource) => resource.type === 'promo' && resource.name,
+    );
+
+    return promo
+      ? {
+          title: promo.name,
+          description: promo.description,
+          ctaLabel: promo.ctaLabel,
+          url: promo.url,
+        }
+      : null;
+  }, [activeLesson]);
 
   const hasFullAccess = Boolean(academySession && accessState === 'ready');
   const isPreviewMode = accessState === 'preview';
@@ -330,7 +345,43 @@ export function CoursePlayer({
 
   // Sidebar controls
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarTab, setSidebarTab] = useState<'content' | 'ai'>('content');
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
+  const [readProgress, setReadProgress] = useState(0);
+
+  const handleMainScroll = () => {
+    const element = mainScrollRef.current;
+    if (!element) return;
+    const scrollable = element.scrollHeight - element.clientHeight;
+    setReadProgress(
+      scrollable > 0 ? Math.min(100, Math.round((element.scrollTop / scrollable) * 100)) : 100,
+    );
+  };
+
+  // Keep the selected lesson visible in the curriculum sidebar.
+  useEffect(() => {
+    const section = curriculum.sections.find((sec) =>
+      sec.lessons.some((lesson) => lesson.id === activeLessonId),
+    );
+    if (section) {
+      setExpandedSections((prev) =>
+        prev[section.id] ? prev : { ...prev, [section.id]: true },
+      );
+    }
+
+    const timer = window.setTimeout(() => {
+      document
+        .querySelector('[data-active-lesson="true"]')
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 60);
+
+    return () => window.clearTimeout(timer);
+  }, [activeLessonId, curriculum.sections, sidebarOpen]);
+
+  // Start each lesson at the top with a fresh reading progress.
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0 });
+    setReadProgress(0);
+  }, [activeLessonId]);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     curriculum.sections.forEach((sec) => {
@@ -391,26 +442,15 @@ export function CoursePlayer({
     activeLesson?.type === 'quiz' &&
     quizMeta.certificateEnabled &&
     (quizPassed || completedLessonIds.has(activeLesson.id));
-  const certificateSvg = useMemo(
-    () =>
-      buildCertificateSvg({
-        learnerName,
-        courseTitle: curriculum.title,
-        certificateTitle: quizMeta.certificateTitle,
-        certificateNumber,
-        issuedDate: certificateIssuedDate,
-      }),
-    [
+  const certificatePreviewUrl = useCertificatePreviewUrl(
+    {
       learnerName,
-      curriculum.title,
-      quizMeta.certificateTitle,
+      courseTitle: curriculum.title,
+      certificateTitle: quizMeta.certificateTitle,
       certificateNumber,
-      certificateIssuedDate,
-    ],
-  );
-  const certificatePreviewUrl = useMemo(
-    () => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(certificateSvg)}`,
-    [certificateSvg],
+      issuedDate: certificateIssuedDate,
+    },
+    quizCertificateReady,
   );
 
   useEffect(() => {
@@ -536,18 +576,6 @@ export function CoursePlayer({
           content: 'Hello Claire! The GSPR matrix typically resides in Section 4 ("General Safety and Performance Requirements") of the Annex II dossier. It serves as the master navigation map connecting every applicable GSPR item to the underlying evidence reports throughout Sections 1-6.',
         },
       ],
-    },
-  ]);
-
-  // AI Assistant state
-  const [aiQuery, setAiQuery] = useState('');
-  const [aiMessages, setAiMessages] = useState<
-    { sender: 'user' | 'ai'; text: string; time: string }[]
-  >([
-    {
-      sender: 'ai',
-      text: 'Hello! I am your AI Regulatory Assistant for this masterclass. You can ask me any question about EU MDR, GSPR mappings, classification rules, or guidance documents (MDCG). How can I assist your study today?',
-      time: 'Just now',
     },
   ]);
 
@@ -914,6 +942,10 @@ export function CoursePlayer({
   };
 
   const handleNextLesson = () => {
+    if (activeLesson && activeLesson.type !== 'quiz') {
+      markLessonCompleted(activeLesson);
+    }
+
     const currentIndex = allLessons.findIndex((l) => l.id === activeLessonId);
     const nextLesson = allLessons.slice(currentIndex + 1).find(canAccessLesson);
     if (nextLesson) {
@@ -963,34 +995,6 @@ export function CoursePlayer({
     setNewQuestionTitle('');
     setNewQuestionText('');
     setShowAskForm(false);
-  };
-
-  const handleSendAiMessage = () => {
-    if (!aiQuery.trim()) return;
-    const userMsg = aiQuery.trim();
-    setAiMessages((prev) => [
-      ...prev,
-      { sender: 'user', text: userMsg, time: 'Just now' },
-    ]);
-    setAiQuery('');
-
-    // Simulated intelligent regulatory response
-    setTimeout(() => {
-      let reply = `Under EU MDR 2017/745, regarding "${userMsg}": Ensure that the rationale is documented in your Annex II Technical File and supported by current MDCG guidance. In Section ${activeLesson?.title}, Monir emphasizes cross-referencing your risk management file (ISO 14971) directly to this requirement.`;
-
-      if (userMsg.toLowerCase().includes('rule 11') || userMsg.toLowerCase().includes('software')) {
-        reply = 'Rule 11 (Annex VIII) classifies software intended to provide information used to take decisions with diagnosis or therapeutic purposes as Class IIa or higher. Most clinical decision support systems jump from MDD Class I to MDR Class IIa or IIb.';
-      } else if (userMsg.toLowerCase().includes('gspr') || userMsg.toLowerCase().includes('annex i')) {
-        reply = 'The GSPR (General Safety and Performance Requirements) in Annex I replaces the Essential Requirements of the MDD. You must complete all 23 requirements and cite harmonized standards / common specifications for each.';
-      } else if (userMsg.toLowerCase().includes('pmcf') || userMsg.toLowerCase().includes('clinical')) {
-        reply = 'Post-Market Clinical Follow-up (PMCF) is a continuous process under MDR Annex XIV Part B. If a proactive PMCF study is deemed not applicable, you must document a detailed clinical justification in the Clinical Evaluation Report (CER).';
-      }
-
-      setAiMessages((prev) => [
-        ...prev,
-        { sender: 'ai', text: reply, time: 'Just now' },
-      ]);
-    }, 600);
   };
 
   if (academySession === undefined || accessState === 'checking') {
@@ -1052,7 +1056,7 @@ export function CoursePlayer({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#0e0c14] text-white">
+    <div className="flex h-dvh flex-col overflow-hidden bg-[#0e0c14] text-white">
       {/* 1. TOP HEADER (Udemy Style) */}
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/10 bg-[#14101e] px-3 sm:px-5">
         <div className="flex items-center gap-3 overflow-hidden">
@@ -1068,7 +1072,7 @@ export function CoursePlayer({
             </span>
           </Link>
 
-          <span className="text-white/20">|</span>
+          <span className="text-white/50">|</span>
 
           <h1 className="truncate text-xs font-medium text-[#ded8ec] sm:text-sm">
             {curriculum.title}
@@ -1085,7 +1089,7 @@ export function CoursePlayer({
               <div className="relative flex size-5 items-center justify-center">
                 <svg className="size-5 -rotate-90" viewBox="0 0 36 36">
                   <path
-                    className="text-white/20"
+                    className="text-white/50"
                     strokeWidth="4"
                     stroke="currentColor"
                     fill="none"
@@ -1105,7 +1109,7 @@ export function CoursePlayer({
               </div>
               <span className="hidden sm:inline">Your progress</span>
               <span className="font-bold text-white">{progressPercent}%</span>
-              <ChevronDown className="size-3 text-white/50" />
+              <ChevronDown className="size-3 text-white/75" />
             </button>
 
             {/* Dropdown Menu */}
@@ -1120,7 +1124,7 @@ export function CoursePlayer({
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
-              <p className="mt-2 text-[#9f98b2]">
+              <p className="mt-2 text-[#c4bdd8]">
                 {completedCount} of {totalLessonsCount} completed
               </p>
               <div className="mt-3 border-t border-white/10 pt-3">
@@ -1165,9 +1169,22 @@ export function CoursePlayer({
       </header>
 
       {/* 2. MAIN WORKSPACE CONTAINER */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* LEFT / CENTER: VIDEO PLAYER & TABS AREA */}
-        <div className="flex flex-1 flex-col overflow-y-auto">
+        <div
+          ref={mainScrollRef}
+          onScroll={handleMainScroll}
+          className="relative flex flex-1 flex-col overflow-y-auto"
+        >
+          {activeLesson?.type === 'article' ? (
+            <div className="sticky top-0 z-20 h-1 w-full shrink-0 bg-white/10">
+              <div
+                className="h-full bg-gradient-to-r from-[#7c3aed] to-[#34d4c6] transition-[width] duration-150"
+                style={{ width: `${readProgress}%` }}
+              />
+            </div>
+          ) : null}
+
           {/* VIDEO CANVAS / PLAYER */}
           {activeLesson?.type === 'article' ? (
             <div className="border-b border-white/10 bg-gradient-to-br from-[#1b152b] via-[#100d1a] to-[#05030a] px-5 py-2 text-white sm:px-10 sm:py-3 lg:px-16">
@@ -1212,34 +1229,48 @@ export function CoursePlayer({
                   ) : null}
                 </header>
 
-                <div className="rounded-lg border border-white/10 bg-[#171322] p-3 shadow-2xl shadow-black/30 sm:p-4">
+                <div className="rounded-xl bg-white p-5 shadow-2xl shadow-black/30 sm:p-8">
                   {activeLesson.description ? (
-                    /<(h[1-6]|p|div|ul|ol|blockquote|strong|b|em|i|br|hr)/i.test(activeLesson.description) ? (
+                    /<(h[1-6]|p|div|ul|ol|blockquote|strong|b|em|i|br|hr|img|iframe|table)/i.test(activeLesson.description) ? (
                       <div
-                        className="text-[15px] leading-7 text-[#c6bed8] sm:text-base
-                          [&_h1]:mt-4 [&_h1]:mb-3 [&_h1]:border-b [&_h1]:border-white/10 [&_h1]:pb-2 [&_h1]:text-2xl [&_h1]:font-black [&_h1]:leading-tight [&_h1]:text-white
-                          [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-xl [&_h2]:font-black [&_h2]:leading-tight [&_h2]:text-white
-                          [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-lg [&_h3]:font-black [&_h3]:text-[#b58dfb]
-                          [&_p]:mb-3 [&_p]:leading-7
-                          [&_blockquote]:my-4 [&_blockquote]:rounded-r-lg [&_blockquote]:border-l-4 [&_blockquote]:border-[#7c3aed] [&_blockquote]:bg-[#7c3aed]/10 [&_blockquote]:p-3 [&_blockquote]:font-semibold [&_blockquote]:text-white
-                          [&_ul]:my-3 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-6
-                          [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-6
+                        className="text-[16px] leading-8 text-[#334155]
+                          [&_h1]:mt-8 [&_h1]:mb-4 [&_h1]:border-b [&_h1]:border-[#e9d5ff] [&_h1]:pb-3 [&_h1]:text-3xl [&_h1]:font-black [&_h1]:leading-tight [&_h1]:text-[#7e22ce] first:[&_h1]:mt-0
+                          [&_h2]:mt-7 [&_h2]:mb-3 [&_h2]:text-2xl [&_h2]:font-black [&_h2]:leading-tight [&_h2]:text-[#0f766e]
+                          [&_h3]:mt-6 [&_h3]:mb-2 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-[#b45309]
+                          [&_h4]:mt-5 [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-bold [&_h4]:text-[#be185d]
+                          [&_h5]:mt-4 [&_h5]:mb-2 [&_h5]:font-bold [&_h5]:text-[#1d4ed8]
+                          [&_h6]:mt-4 [&_h6]:mb-2 [&_h6]:font-bold [&_h6]:text-[#475569]
+                          [&_p]:mb-4
+                          [&_blockquote]:my-5 [&_blockquote]:rounded-r-xl [&_blockquote]:border-l-4 [&_blockquote]:border-[#7c3aed] [&_blockquote]:bg-[#f5f3ff] [&_blockquote]:p-4 [&_blockquote]:text-[#3b0764]
+                          [&_blockquote[class*=emerald]]:border-[#10b981] [&_blockquote[class*=emerald]]:bg-[#ecfdf5] [&_blockquote[class*=emerald]]:text-[#064e3b]
+                          [&_blockquote[class*=amber]]:border-[#f59e0b] [&_blockquote[class*=amber]]:bg-[#fffbeb] [&_blockquote[class*=amber]]:text-[#78350f]
+                          [&_ul]:my-4 [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-6
+                          [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:space-y-2 [&_ol]:pl-6
                           [&_li]:pl-1
-                          [&_strong]:font-black [&_strong]:text-white
-                          [&_hr]:my-5 [&_hr]:border-white/10
-                          [&_img]:my-4 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-xl
+                          [&_strong]:font-black [&_strong]:text-[#0f172a]
+                          [&_b]:font-black [&_b]:text-[#0f172a]
+                          [&_hr]:my-6 [&_hr]:border-[#e2e8f0]
+                          [&_mark]:rounded [&_mark]:bg-[#fde68a] [&_mark]:px-1 [&_mark]:text-[#0f172a]
+                          [&_a]:font-bold [&_a]:text-[#7c3aed] [&_a]:underline
+                          [&_code]:rounded [&_code]:bg-[#f1f5f9] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-sm [&_code]:font-bold [&_code]:text-[#7c3aed]
+                          [&_img]:my-5 [&_img]:block [&_img]:mx-auto! [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-xl
                           [&_iframe]:max-w-full
-                          [&_mark]:rounded [&_mark]:bg-amber-400/20 [&_mark]:px-1 [&_mark]:text-amber-200
-                          [&_a]:font-bold [&_a]:text-[#b58dfb] [&_a]:underline"
-                        dangerouslySetInnerHTML={{ __html: activeLesson.description }}
+                          [&_table]:w-full [&_table]:border-collapse [&_table]:text-[15px] [&_table]:leading-6
+                          [&_th]:border [&_th]:border-[#cbd5e1] [&_th]:bg-[#f5f3ff] [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-bold [&_th]:text-[#3b0764]
+                          [&_td]:border [&_td]:border-[#cbd5e1] [&_td]:px-3 [&_td]:py-2 [&_td]:align-top
+                          [&_tbody_tr:nth-child(even)_td]:bg-[#faf9ff]
+                          [&_td_p]:mb-0 [&_th_p]:mb-0"
+                        dangerouslySetInnerHTML={{
+                          __html: prepareArticleHtml(activeLesson.description),
+                        }}
                       />
                     ) : (
-                      <p className="whitespace-pre-wrap text-[15px] leading-7 text-[#c6bed8] sm:text-base">
+                      <p className="whitespace-pre-wrap text-[16px] leading-8 text-[#334155]">
                         {activeLesson.description}
                       </p>
                     )
                   ) : (
-                    <p className="text-sm italic text-[#8e879f]">
+                    <p className="text-sm italic text-[#64748b]">
                       No article content has been added for this lesson yet.
                     </p>
                   )}
@@ -1289,7 +1320,7 @@ export function CoursePlayer({
                           <img
                             src={certificatePreviewUrl}
                             alt={`${quizMeta.certificateTitle} certificate`}
-                            className="block w-full"
+                            className="block aspect-[8/5] w-full"
                           />
                         </div>
                       </div>
@@ -1871,14 +1902,53 @@ export function CoursePlayer({
           </div>
           )}
 
+          {activePromo && activeLesson?.type !== 'quiz' && !sidebarOpen ? (
+            <LessonPromoCard
+              key={activeLesson?.id}
+              promo={activePromo}
+              variant="inline"
+              tracking={{ course: courseId, lesson: activeLesson?.title || '' }}
+            />
+          ) : null}
+
+          {activeLesson?.type === 'article' ? (
+            <div className="sticky bottom-0 z-20 shrink-0 border-t border-white/10 bg-[#14101e]/95 px-4 py-3 backdrop-blur sm:px-6">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 text-xs text-[#c4bdd8]">
+                  <p className="font-bold text-white">
+                    Lesson {Math.max(1, allLessons.findIndex((l) => l.id === activeLessonId) + 1)} of {allLessons.length}
+                  </p>
+                  <p className="mt-0.5 truncate">{readProgress}% read</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handlePrevLesson}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/10"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextLesson}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#7c3aed] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#6d31dc]"
+                  >
+                    Complete & continue
+                    <ArrowRight className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {activeLesson?.type !== 'quiz' ? (
             <>
               {/* 3. TABS HEADER UNDER VIDEO */}
               <div className="border-b border-white/10 bg-[#14101e] px-4 sm:px-6">
-                <div className="flex gap-4 overflow-x-auto text-xs font-semibold text-[#8f88a2] sm:text-sm scrollbar-none">
+                <div className="flex gap-4 overflow-x-auto text-xs font-semibold text-[#c4bdd8] sm:text-sm scrollbar-none">
               {[
                 { key: 'overview', label: 'Overview' },
-                { key: 'resources', label: 'Templates & Files' },
+                { key: 'resources', label: 'Resources & Links' },
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -1905,89 +1975,91 @@ export function CoursePlayer({
                   <h2 className="text-2xl font-extrabold text-white sm:text-3xl">
                     {activeLesson?.title}
                   </h2>
-                  <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-[#9f97b4] sm:text-sm">
+                  <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-[#c4bdd8] sm:text-sm">
                     <span>Total {curriculum.totalDuration}</span>
                     <span>•</span>
                     <span>Updated {curriculum.lastUpdated}</span>
                   </div>
                 </div>
 
-                {/* Action quick banner for mark complete */}
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#171322] p-4 shadow-sm">
-                  {hasFullAccess ? (
-                    <div className="flex items-center gap-3">
+                {/* Action quick banner for mark complete (articles use the sticky bar) */}
+                {activeLesson?.type !== 'article' ? (
+                  <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#171322] p-4 shadow-sm">
+                    {hasFullAccess ? (
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleLessonCompleted(activeLesson.id)}
+                          className={`flex size-6 items-center justify-center rounded-md border transition ${
+                            completedLessonIds.has(activeLesson.id)
+                              ? 'border-[#34d4c6] bg-[#34d4c6] text-[#0e0c14]'
+                              : 'border-white/30 bg-white/5 text-white hover:border-white'
+                          }`}
+                        >
+                          {completedLessonIds.has(activeLesson.id) && <Check className="size-4 stroke-[3]" />}
+                        </button>
+                        <div>
+                          <p className="text-sm font-bold text-white">
+                            {completedLessonIds.has(activeLesson.id)
+                              ? 'Lesson Completed'
+                              : 'Mark lesson as complete'}
+                          </p>
+                          <p className="text-xs text-[#b9b1cf]">
+                            Advance your certificate progress
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-9 items-center justify-center rounded-lg bg-[#7c3aed]/20 text-[#b58dfb]">
+                          <LockKeyhole className="size-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-white">
+                            Free preview mode
+                          </p>
+                          <p className="text-xs text-[#b9b1cf]">
+                            Sign in to unlock all lessons and save your progress.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+  
+                    <div className="flex items-center gap-2">
+                      {!hasFullAccess ? (
+                        <button
+                          type="button"
+                          onClick={signInToUnlock}
+                          className="rounded-lg bg-[#7c3aed] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#6d31dc]"
+                        >
+                          Sign in
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        onClick={() => toggleLessonCompleted(activeLesson.id)}
-                        className={`flex size-6 items-center justify-center rounded-md border transition ${
-                          completedLessonIds.has(activeLesson.id)
-                            ? 'border-[#34d4c6] bg-[#34d4c6] text-[#0e0c14]'
-                            : 'border-white/30 bg-white/5 text-white hover:border-white'
-                        }`}
+                        onClick={handlePrevLesson}
+                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/10"
                       >
-                        {completedLessonIds.has(activeLesson.id) && <Check className="size-4 stroke-[3]" />}
+                        Previous
                       </button>
-                      <div>
-                        <p className="text-sm font-bold text-white">
-                          {completedLessonIds.has(activeLesson.id)
-                            ? 'Lesson Completed'
-                            : 'Mark lesson as complete'}
-                        </p>
-                        <p className="text-xs text-[#8e879f]">
-                          Advance your certificate progress
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-9 items-center justify-center rounded-lg bg-[#7c3aed]/20 text-[#b58dfb]">
-                        <LockKeyhole className="size-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-white">
-                          Free preview mode
-                        </p>
-                        <p className="text-xs text-[#8e879f]">
-                          Sign in to unlock all lessons and save your progress.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    {!hasFullAccess ? (
                       <button
                         type="button"
-                        onClick={signInToUnlock}
-                        className="rounded-lg bg-[#7c3aed] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#6d31dc]"
+                        onClick={handleNextLesson}
+                        className="inline-flex items-center gap-1 rounded-lg bg-[#7c3aed] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#6d31dc]"
                       >
-                        Sign in
+                        Next Lesson
+                        <ArrowRight className="size-3.5" />
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={handlePrevLesson}
-                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/10"
-                    >
-                      Previous
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleNextLesson}
-                      className="inline-flex items-center gap-1 rounded-lg bg-[#7c3aed] px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-[#6d31dc]"
-                    >
-                      Next Lesson
-                      <ArrowRight className="size-3.5" />
-                    </button>
+                    </div>
                   </div>
-                </div>
+                ) : null}
 
                 {/* Lesson Description */}
                 {activeLesson?.type !== 'article' ? (
                   <div className="rounded-2xl border border-white/10 bg-[#171322] p-6">
                     <h3 className="text-lg font-bold text-white">About this Lecture</h3>
                     {activeLesson?.description ? (
-                      /<(h[1-6]|p|div|ul|ol|blockquote|strong|b|em|i|br|hr)/i.test(activeLesson.description) ? (
+                      /<(h[1-6]|p|div|ul|ol|blockquote|strong|b|em|i|br|hr|img|iframe|table)/i.test(activeLesson.description) ? (
                         <div
                           className="mt-4 text-sm leading-relaxed text-[#c6bed8] space-y-3
                             [&_h1]:text-2xl [&_h1]:font-black [&_h1]:text-white [&_h1]:mt-6 [&_h1]:mb-3 [&_h1]:border-b [&_h1]:border-white/10 [&_h1]:pb-2
@@ -2008,36 +2080,18 @@ export function CoursePlayer({
                         </p>
                       )
                     ) : (
-                      <p className="mt-3 text-sm text-[#8e879f] italic">No description provided for this lesson.</p>
+                      <p className="mt-3 text-sm text-[#b9b1cf] italic">No description provided for this lesson.</p>
                     )}
 
-                    {/* Attached resources */}
+                    {/* Attached resources and links */}
                     {visibleResources.length > 0 && (
                       <div className="mt-6 border-t border-white/10 pt-4">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-[#b58dfb]">
-                          Downloadable Resources in this Lecture
+                          Resources & Links in this Lecture
                         </h4>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          {visibleResources.map((res) => (
-                            <div
-                              key={res.name}
-                              className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 p-3 text-xs"
-                            >
-                              <div className="flex items-center gap-2.5">
-                                <FileSpreadsheet className="size-4 text-[#34d4c6]" />
-                                <div>
-                                  <p className="font-semibold text-white">{res.name}</p>
-                                  <p className="text-[11px] text-[#8e879f]">{res.size} • {res.type}</p>
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                className="rounded p-1.5 text-[#b58dfb] transition hover:bg-white/10 hover:text-white"
-                                title="Download resource"
-                              >
-                                <Download className="size-4" />
-                              </button>
-                            </div>
+                        <div className="mt-3 grid gap-3">
+                          {visibleResources.map((res, index) => (
+                            <LessonResourceCard key={`${res.name}-${index}`} resource={res} />
                           ))}
                         </div>
                       </div>
@@ -2073,13 +2127,13 @@ export function CoursePlayer({
               <div className="mx-auto max-w-4xl space-y-6">
                 <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-white/40" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-white/70" />
                     <input
                       type="text"
                       placeholder="Search questions in this course..."
                       value={searchQA}
                       onChange={(e) => setSearchQA(e.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-4 text-sm text-white placeholder:text-white/40 focus:border-[#7c3aed] focus:outline-none"
+                      className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-4 text-sm text-white placeholder:text-white/70 focus:border-[#7c3aed] focus:outline-none"
                     />
                   </div>
                   <Button
@@ -2099,14 +2153,14 @@ export function CoursePlayer({
                       placeholder="Title or summary of your question..."
                       value={newQuestionTitle}
                       onChange={(e) => setNewQuestionTitle(e.target.value)}
-                      className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 p-2.5 text-sm text-white placeholder:text-white/40 focus:border-[#7c3aed] focus:outline-none"
+                      className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 p-2.5 text-sm text-white placeholder:text-white/70 focus:border-[#7c3aed] focus:outline-none"
                     />
                     <textarea
                       rows={3}
                       placeholder="Details, clause references, or specific device challenges..."
                       value={newQuestionText}
                       onChange={(e) => setNewQuestionText(e.target.value)}
-                      className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 p-2.5 text-sm text-white placeholder:text-white/40 focus:border-[#7c3aed] focus:outline-none"
+                      className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 p-2.5 text-sm text-white placeholder:text-white/70 focus:border-[#7c3aed] focus:outline-none"
                     />
                     <div className="mt-3 flex justify-end">
                       <Button
@@ -2137,7 +2191,7 @@ export function CoursePlayer({
                             </div>
                             <div>
                               <h4 className="text-sm font-bold text-white">{item.author}</h4>
-                              <p className="text-[11px] text-[#8e879f]">{item.role} • {item.timeAgo}</p>
+                              <p className="text-[11px] text-[#b9b1cf]">{item.role} • {item.timeAgo}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-[#b58dfb]">
@@ -2168,7 +2222,7 @@ export function CoursePlayer({
                                   </Badge>
                                 )}
                               </div>
-                              <span className="text-[11px] text-[#8e879f] ml-auto">{ans.timeAgo}</span>
+                              <span className="text-[11px] text-[#b9b1cf] ml-auto">{ans.timeAgo}</span>
                             </div>
                             <p className="mt-2 text-xs leading-relaxed text-[#c6bed8] sm:text-sm">
                               {ans.content}
@@ -2195,7 +2249,7 @@ export function CoursePlayer({
                     placeholder="Type your personal note for this timestamp..."
                     value={newNoteText}
                     onChange={(e) => setNewNoteText(e.target.value)}
-                    className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white placeholder:text-white/40 focus:border-[#7c3aed] focus:outline-none"
+                    className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white placeholder:text-white/70 focus:border-[#7c3aed] focus:outline-none"
                   />
                   <div className="mt-3 flex justify-end">
                     <Button
@@ -2225,7 +2279,7 @@ export function CoursePlayer({
                           <Play className="size-2.5 fill-current" />
                           <span>{note.timestamp}</span>
                         </button>
-                        <span className="text-[11px] text-[#8e879f]">{note.lessonTitle}</span>
+                        <span className="text-[11px] text-[#b9b1cf]">{note.lessonTitle}</span>
                       </div>
                       <p className="mt-2.5 text-[#dcd6ec] leading-relaxed">
                         {note.content}
@@ -2248,7 +2302,7 @@ export function CoursePlayer({
                       <h4 className="text-sm font-bold text-white">
                         Monir El Azzouzi posted an announcement
                       </h4>
-                      <p className="text-xs text-[#8e879f]">3 days ago</p>
+                      <p className="text-xs text-[#b9b1cf]">3 days ago</p>
                     </div>
                   </div>
                   <h3 className="mt-4 text-base font-bold text-white">
@@ -2272,7 +2326,7 @@ export function CoursePlayer({
                         <Star key={s} className="size-4 fill-current" />
                       ))}
                     </div>
-                    <p className="mt-1 text-xs text-[#8e879f]">Course Rating</p>
+                    <p className="mt-1 text-xs text-[#b9b1cf]">Course Rating</p>
                   </div>
                   <div className="flex-1 space-y-2">
                     {[
@@ -2283,7 +2337,7 @@ export function CoursePlayer({
                       { stars: 1, pct: 0 },
                     ].map((row) => (
                       <div key={row.stars} className="flex items-center gap-3 text-xs">
-                        <span className="w-12 text-[#9f97b4]">{row.stars} stars</span>
+                        <span className="w-12 text-[#c4bdd8]">{row.stars} stars</span>
                         <div className="h-2 flex-1 rounded-full bg-white/10">
                           <div
                             className="h-full rounded-full bg-[#f59e0b]"
@@ -2319,7 +2373,7 @@ export function CoursePlayer({
                           </div>
                           <div>
                             <p className="text-xs font-bold text-white">{rev.name}</p>
-                            <p className="text-[10px] text-[#8e879f]">{rev.role}</p>
+                            <p className="text-[10px] text-[#b9b1cf]">{rev.role}</p>
                           </div>
                         </div>
                         <div className="flex text-[#f59e0b]">
@@ -2341,44 +2395,14 @@ export function CoursePlayer({
             {activeTab === 'resources' && (
               <div className="mx-auto max-w-4xl space-y-4">
                 <div className="rounded-2xl border border-white/10 bg-[#171322] p-6">
-                  <h3 className="text-lg font-bold text-white">Lesson Resources & Downloads</h3>
-                  <p className="mt-1 text-xs text-[#8e879f]">
-                    Downloadable files, templates, and materials for this lecture.
-                  </p>
-
-                  <div className="mt-6 space-y-3">
+                  <div className="space-y-3">
                     {visibleResources.length > 0 ? (
                       visibleResources.map((item: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="flex flex-col justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-4 sm:flex-row sm:items-center"
-                        >
-                          <div className="flex items-center gap-3">
-                            <FileText className="size-5 text-[#b58dfb]" />
-                            <div>
-                              <p className="text-sm font-bold text-white">{item.name}</p>
-                              <p className="text-xs text-[#8e879f]">
-                                {item.type ? String(item.type).toUpperCase() : 'DOCUMENT'} {item.size ? `• ${item.size}` : ''}
-                              </p>
-                            </div>
-                          </div>
-                          {item.url && (
-                            <a
-                              href={item.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              download
-                              className="inline-flex items-center justify-center rounded-lg bg-[#7c3aed] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#6d31dc] transition-colors"
-                            >
-                              <Download className="mr-1.5 size-3.5" />
-                              Download
-                            </a>
-                          )}
-                        </div>
+                        <LessonResourceCard key={idx} resource={item} />
                       ))
                     ) : (
-                      <div className="py-8 text-center text-xs text-[#8e879f]">
-                        No specific resource attachments for this lesson.
+                      <div className="py-8 text-center text-xs text-[#b9b1cf]">
+                        No resources or links for this lesson.
                       </div>
                     )}
                   </div>
@@ -2390,49 +2414,25 @@ export function CoursePlayer({
           ) : null}
         </div>
 
-        {/* RIGHT SIDEBAR: COURSE CONTENT & AI TUTOR */}
+        {/* RIGHT SIDEBAR: COURSE CONTENT */}
         {sidebarOpen && (
-          <aside className="w-80 shrink-0 border-l border-white/10 bg-[#14101e] flex flex-col md:w-96">
+          <aside className="flex min-h-0 w-80 shrink-0 flex-col border-l border-white/10 bg-[#14101e] md:w-96">
             {/* Sidebar Navigation Top Header */}
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <div className="flex items-center gap-1 rounded-lg bg-white/5 p-0.5 text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setSidebarTab('content')}
-                  className={`rounded-md px-3 py-1.5 transition ${
-                    sidebarTab === 'content'
-                      ? 'bg-[#7c3aed] text-white font-bold'
-                      : 'text-[#9f97b4] hover:text-white'
-                  }`}
-                >
-                  Course content
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSidebarTab('ai')}
-                  className={`flex items-center gap-1 rounded-md px-3 py-1.5 transition ${
-                    sidebarTab === 'ai'
-                      ? 'bg-[#7c3aed] text-white font-bold'
-                      : 'text-[#9f97b4] hover:text-white'
-                  }`}
-                >
-                  <Sparkles className="size-3 text-[#34d4c6]" />
-                  <span>AI Assistant</span>
-                </button>
-              </div>
+              <h2 className="text-sm font-bold text-white">Course content</h2>
 
               <button
                 type="button"
                 onClick={() => setSidebarOpen(false)}
-                className="rounded p-1 text-white/50 hover:bg-white/10 hover:text-white"
+                className="rounded p-1 text-white/75 hover:bg-white/10 hover:text-white"
                 title="Collapse sidebar"
               >
                 <X className="size-4" />
               </button>
             </div>
 
-            {/* SIDEBAR TAB 1: CURRICULUM ACCORDION */}
-            {sidebarTab === 'content' && (
+            {/* CURRICULUM ACCORDION */}
+            {(
               <div className="flex-1 overflow-y-auto">
                 <div className="divide-y divide-white/5">
                   {curriculum.sections.map((section, sIdx) => {
@@ -2455,15 +2455,18 @@ export function CoursePlayer({
                         >
                           <div className="pr-2">
                             <h3 className="text-xs font-bold text-white sm:text-sm">
+                              {section.lessons.some((l) => l.id === activeLessonId) ? (
+                                <span className="mr-2 inline-block size-2 rounded-full bg-[#a78bfa] align-middle" />
+                              ) : null}
                               {section.title}
                             </h3>
-                            <p className="mt-1 text-[11px] text-[#8e879f]">
+                            <p className="mt-1 text-[11px] text-[#b9b1cf]">
                               {hasFullAccess ? `${secCompleted} / ${secTotal}` : `${visibleLessons.length} preview`} |{' '}
                               {visibleLessons.reduce((acc, l) => acc + Math.round(l.durationSeconds / 60), 0)} min
                             </p>
                           </div>
                           <ChevronDown
-                            className={`size-4 shrink-0 text-white/50 transition-transform duration-200 ${
+                            className={`size-4 shrink-0 text-white/75 transition-transform duration-200 ${
                               isExpanded ? 'rotate-180' : ''
                             }`}
                           />
@@ -2489,12 +2492,14 @@ export function CoursePlayer({
                                     setCurrentTime(0);
                                     setIsPlaying(true);
                                   }}
-                                  className={`group flex cursor-pointer items-start gap-3 p-3.5 transition ${
+                                  data-active-lesson={isActive ? 'true' : undefined}
+                                  aria-current={isActive ? 'true' : undefined}
+                                  className={`group flex cursor-pointer items-start gap-3 border-l-4 p-3.5 transition ${
                                     isActive
-                                      ? 'border-l-4 border-[#7c3aed] bg-[#221738] text-white'
+                                      ? 'border-[#a78bfa] bg-[#3a2373] text-white shadow-[inset_0_0_0_1px_rgba(167,139,250,0.4)]'
                                       : isLocked
-                                        ? 'text-[#716982] hover:bg-white/[0.03]'
-                                        : 'hover:bg-white/5 text-[#c8c0da]'
+                                        ? 'border-transparent text-[#a89fc0] hover:bg-white/[0.03]'
+                                        : 'border-transparent text-[#c8c0da] hover:bg-white/5'
                                   }`}
                                 >
                                   {/* Checkbox */}
@@ -2505,7 +2510,7 @@ export function CoursePlayer({
                                       isDone
                                         ? 'border-[#34d4c6] bg-[#34d4c6] text-[#0e0c14]'
                                         : isLocked
-                                          ? 'border-white/10 bg-white/[0.03] text-white/30'
+                                          ? 'border-white/10 bg-white/[0.03] text-white/60'
                                           : 'border-white/30 bg-white/5 hover:border-white'
                                     }`}
                                     aria-label={isLocked ? 'Sign in to unlock lesson' : 'Toggle completed'}
@@ -2516,12 +2521,18 @@ export function CoursePlayer({
                                   <div className="flex-1">
                                     <p
                                       className={`text-xs font-medium leading-snug ${
-                                        isActive ? 'font-bold text-white' : ''
+                                        isActive ? 'text-[13px] font-bold text-white' : ''
                                       }`}
                                     >
                                       {lesson.title}
                                     </p>
-                                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#8e879f]">
+                                    {isActive ? (
+                                      <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-[#7c3aed] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                                        <span className="size-1.5 animate-pulse rounded-full bg-white" />
+                                        {lesson.type === 'article' ? 'Reading now' : lesson.type === 'quiz' ? 'Quiz in progress' : 'Playing now'}
+                                      </span>
+                                    ) : null}
+                                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#b9b1cf]">
                                       <PlayCircle className="size-3 text-[#b58dfb]" />
                                       <span>{lesson.duration}</span>
                                       {lesson.previewEnabled && (
@@ -2530,7 +2541,7 @@ export function CoursePlayer({
                                         </span>
                                       )}
                                       {isLocked && (
-                                        <span className="flex items-center gap-0.5 rounded bg-white/5 px-1 py-0.5 text-white/40">
+                                        <span className="flex items-center gap-0.5 rounded bg-white/5 px-1 py-0.5 text-white/70">
                                           <LockKeyhole className="size-2.5" />
                                           <span>Locked</span>
                                         </span>
@@ -2555,61 +2566,14 @@ export function CoursePlayer({
               </div>
             )}
 
-            {/* SIDEBAR TAB 2: AI REGULATORY ASSISTANT */}
-            {sidebarTab === 'ai' && (
-              <div className="flex flex-1 flex-col justify-between overflow-hidden p-3">
-                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                  {aiMessages.map((msg, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex flex-col text-xs ${
-                        msg.sender === 'user' ? 'items-end' : 'items-start'
-                      }`}
-                    >
-                      <div
-                        className={`rounded-2xl p-3 max-w-[90%] leading-relaxed ${
-                          msg.sender === 'user'
-                            ? 'bg-[#7c3aed] text-white'
-                            : 'border border-white/10 bg-white/5 text-[#dcd6ec]'
-                        }`}
-                      >
-                        {msg.sender === 'ai' && (
-                          <div className="mb-1 flex items-center gap-1 text-[10px] font-bold text-[#34d4c6]">
-                            <Sparkles className="size-3" />
-                            <span>EMD AI Tutor</span>
-                          </div>
-                        )}
-                        {msg.text}
-                      </div>
-                      <span className="mt-1 text-[9px] text-white/40">{msg.time}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* AI Input Box */}
-                <div className="mt-3 border-t border-white/10 pt-3">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Ask about GSPR, Rule 11, PMS..."
-                      value={aiQuery}
-                      onChange={(e) => setAiQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSendAiMessage();
-                      }}
-                      className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white placeholder:text-white/40 focus:border-[#7c3aed] focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleSendAiMessage}
-                      className="flex size-8 items-center justify-center rounded-lg bg-[#7c3aed] text-white transition hover:bg-[#6d31dc]"
-                    >
-                      <Send className="size-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            {activePromo && activeLesson?.type !== 'quiz' ? (
+              <LessonPromoCard
+                key={activeLesson?.id}
+                promo={activePromo}
+                variant="sidebar"
+                tracking={{ course: courseId, lesson: activeLesson?.title || '' }}
+              />
+            ) : null}
           </aside>
         )}
       </div>
@@ -2621,7 +2585,7 @@ export function CoursePlayer({
             <button
               type="button"
               onClick={() => setRatingModalOpen(false)}
-              className="absolute right-4 top-4 text-white/50 hover:text-white"
+              className="absolute right-4 top-4 text-white/75 hover:text-white"
             >
               <X className="size-5" />
             </button>
@@ -2630,7 +2594,7 @@ export function CoursePlayer({
               <div className="py-6 text-center">
                 <CheckCircle2 className="mx-auto size-12 text-[#34d4c6]" />
                 <h3 className="mt-3 text-lg font-bold">Thank you for your rating!</h3>
-                <p className="mt-2 text-xs text-[#a098b5]">
+                <p className="mt-2 text-xs text-[#c4bdd8]">
                   Your review helps Monir and the Easy Medical Device team improve future lessons.
                 </p>
                 <Button
@@ -2646,7 +2610,7 @@ export function CoursePlayer({
             ) : (
               <div>
                 <h3 className="text-lg font-bold">Rate this Masterclass</h3>
-                <p className="mt-1 text-xs text-[#a098b5]">
+                <p className="mt-1 text-xs text-[#c4bdd8]">
                   How would you rate your learning experience with Monir El Azzouzi?
                 </p>
 
@@ -2662,7 +2626,7 @@ export function CoursePlayer({
                         className={`size-8 ${
                           star <= selectedRating
                             ? 'fill-[#f59e0b] text-[#f59e0b]'
-                            : 'text-white/20'
+                            : 'text-white/50'
                         }`}
                       />
                     </button>
@@ -2672,7 +2636,7 @@ export function CoursePlayer({
                 <textarea
                   rows={3}
                   placeholder="Tell us what you loved or how we can improve..."
-                  className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white placeholder:text-white/40 focus:border-[#7c3aed] focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white placeholder:text-white/70 focus:border-[#7c3aed] focus:outline-none"
                 />
 
                 <div className="mt-5 flex justify-end gap-2">

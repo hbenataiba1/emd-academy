@@ -54,9 +54,9 @@ import {
   isSafeLinkedInEmbedUrl,
 } from '@/lib/community-posts';
 import {
-  buildCertificateSvg,
   formatCertificateDate,
 } from '@/lib/academy-certificate';
+import { useCertificatePreviewUrl } from '@/lib/use-certificate-preview';
 import {
   getAcademyAuthHeader,
   getStoredAcademySession,
@@ -92,16 +92,7 @@ type CourseLearnerState = {
   certificateNumber?: string;
 };
 
-// Sample of the exact certificate learners receive (same template as the real one).
-const sampleCertificatePreview = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-  buildCertificateSvg({
-    learnerName: 'Your Name',
-    courseTitle: 'EU MDR Technical File Masterclass',
-    certificateTitle: 'Certificate of Completion',
-    certificateNumber: 'EMDA-2026-XXXX-00000000',
-    issuedDate: formatCertificateDate(),
-  }),
-)}`;
+
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
   notation: 'compact',
@@ -127,10 +118,19 @@ function getReadableResponseError(text: string) {
   return cleaned.length > 220 ? `${cleaned.slice(0, 220)}...` : cleaned;
 }
 
+const sampleCertificatePayload = {
+  learnerName: 'Your Name',
+  courseTitle: 'EU MDR Technical File Masterclass',
+  certificateTitle: 'Certificate of Completion',
+  certificateNumber: 'EMDA-2026-XXXX-00000000',
+  issuedDate: formatCertificateDate(),
+};
+
 export function AcademyPage({
   initialCourses = featuredCourses,
   communityPosts = [],
 }: AcademyPageProps) {
+  const sampleCertificatePreview = useCertificatePreviewUrl(sampleCertificatePayload);
   const [selectedCategory, setSelectedCategory] =
     useState<(typeof courseCategories)[number]>('All');
   const [search, setSearch] = useState('');
@@ -521,7 +521,7 @@ export function AcademyPage({
                   <img
                     src={sampleCertificatePreview}
                     alt="Sample Easy Medical Device Academy certificate"
-                    className="block w-full"
+                    className="block aspect-[8/5] w-full"
                     loading="lazy"
                   />
                 </div>
@@ -630,7 +630,7 @@ export function AcademyPage({
                 </p>
 
                 <p className="mt-4 text-sm leading-relaxed text-[#625b75] sm:text-base">
-                  You will learn from a Medical Device Expert with over <strong className="text-[#171321]">15 years</strong> of
+                  You will learn from a Medical Device Expert with over <strong className="text-[#171321]">15 years</strong>{" "}of
                   hands-on international experience. Monir has personally guided
                   MedTech companies through CE mark approvals (EU MDR &amp; IVDR),
                   FDA clearances, and ISO 13485 certifications — and he teaches
@@ -987,11 +987,11 @@ function CourseCard({
             <CheckCircle2 className="size-3.5" />
             Completed
           </Badge>
-        ) : (
+        ) : course.badge ? (
           <Badge className="absolute left-3 top-3 bg-white text-[#201b31]">
             {course.badge}
           </Badge>
-        )}
+        ) : null}
         <div className="absolute bottom-3 left-3 rounded-lg bg-white/94 px-3 py-2 text-xs font-bold text-[#201b31]">
           {course.category}
         </div>

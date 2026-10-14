@@ -301,7 +301,7 @@ export function mapSupabaseCourse(
     students: row.learner_count || row.students || 0,
     price,
     priceLabel: row.price_label || `$${price}`,
-    badge: row.badge || fallback.badge,
+    badge: row.badge?.trim() || '',
     image:
       row.thumbnail_url ||
       row.image ||

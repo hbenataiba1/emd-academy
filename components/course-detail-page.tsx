@@ -1,5 +1,6 @@
 'use client';
 
+import { useCertificatePreviewUrl } from '@/lib/use-certificate-preview';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -29,7 +30,6 @@ import {
   type AcademySession,
 } from '@/lib/academy-session';
 import {
-  buildCertificateSvg,
   formatCertificateDate,
 } from '@/lib/academy-certificate';
 import {
@@ -169,19 +169,13 @@ export function CourseDetailPage({
     () => new Set(),
   );
   const [courseStarted, setCourseStarted] = useState(false);
-  const certificateMockup = useMemo(
-    () =>
-      `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-        buildCertificateSvg({
-          learnerName: 'Your Name',
-          courseTitle: course.title,
-          certificateTitle: 'Certificate of Completion',
-          certificateNumber: 'EMDA-2026-XXXX-00000000',
-          issuedDate: formatCertificateDate(),
-        }),
-      )}`,
-    [course.title],
-  );
+  const certificateMockup = useCertificatePreviewUrl({
+    learnerName: 'Your Name',
+    courseTitle: course.title,
+    certificateTitle: 'Certificate of Completion',
+    certificateNumber: 'EMDA-2026-XXXX-00000000',
+    issuedDate: formatCertificateDate(),
+  });
 
   const freeCourse = isFreeCourse(course);
   const totalLessons = useMemo(
@@ -569,7 +563,7 @@ export function CourseDetailPage({
             </h2>
             <p className="mt-3 text-sm leading-6 text-[#625b75] sm:text-base">
               Complete all lessons and pass the exam for{' '}
-              <span className="font-bold text-[#171321]">{course.title}</span> to receive a
+              <span className="font-bold text-[#171321]">{course.title}</span>{" "}to receive a
               verified certificate from Easy Medical Device Academy.
             </p>
             <ul className="mt-5 space-y-2.5">
@@ -592,7 +586,7 @@ export function CourseDetailPage({
                 <img
                   src={certificateMockup}
                   alt={`Sample certificate for ${course.title}`}
-                  className="block w-full"
+                  className="block aspect-[8/5] w-full"
                   loading="lazy"
                 />
               </div>

@@ -1,3 +1,9 @@
+import {
+  getCertificateVerifyUrl,
+  qrPdfOperators,
+  premiumQrSvg,
+} from '@/lib/certificate-qr';
+
 export type CertificateSvgPayload = {
   learnerName: string;
   courseTitle: string;
@@ -189,14 +195,15 @@ export function buildCertificatePdfBlob({
     pdfText({ text: 'ISSUE DATE', x: 80, y: 100, size: 8, font: 'F2' }),
     '0.098 0.106 0.137 rg',
     pdfText({ text: issuedDate, x: 80, y: 84, size: 12, font: 'F2' }),
-    '0.961 0.620 0.043 rg',
-    circle(421, 92, 36, 'f'),
-    '0.573 0.251 0.055 RG 0.8 w',
-    circle(421, 92, 29, 'S'),
-    '0.231 0.133 0.012 rg',
-    pdfText({ text: 'EMD', x: 421, y: 87, size: 16, font: 'F2', align: 'center' }),
+    // Premium verification QR (replaces the old seal + credential id)
+    '0.831 0.627 0.090 RG 1.2 w 1 1 1 rg 383 52 76 76 re B',
+    '0.231 0.027 0.392 rg',
+    qrPdfOperators(getCertificateVerifyUrl(certificateNumber), 389, 58, 64),
+    '1 1 1 rg 0.486 0.227 0.929 RG 0.8 w 414 83 14 14 re B',
+    '0.231 0.027 0.392 rg',
+    pdfText({ text: 'EMD', x: 421, y: 88, size: 5.5, font: 'F2', align: 'center' }),
     '0.427 0.157 0.851 rg',
-    pdfText({ text: `Credential ID: ${certificateNumber}`, x: 421, y: 44, size: 8, font: 'F2', align: 'center' }),
+    pdfText({ text: 'SCAN TO VERIFY', x: 421, y: 40, size: 6.5, font: 'F2', align: 'center' }),
     '0.231 0.027 0.392 rg',
     pdfText({ text: 'Monir El Azzouzi', x: 762, y: 92, size: 17, font: 'F3', align: 'right' }),
     '0.486 0.227 0.929 RG 1.2 w 622 83 m 762 83 l S',
@@ -233,77 +240,184 @@ export function buildCertificatePdfBlob({
   return new Blob([pdf], { type: 'application/pdf' });
 }
 
-export function buildCertificateSvg({
-  learnerName,
-  courseTitle,
-  certificateTitle,
-  certificateNumber,
-  issuedDate,
-}: CertificateSvgPayload) {
-  const titleLines = splitSvgText(certificateTitle, 70).slice(0, 2);
-  const courseLines = splitSvgText(courseTitle, 56).slice(0, 2);
-  const nameSize = Math.min(84, Math.floor(1300 / Math.max(learnerName.length * 0.5, 1)));
+export function buildCertificateSvg(
+  {
+    learnerName,
+    courseTitle,
+    certificateTitle,
+    certificateNumber,
+    issuedDate,
+  }: CertificateSvgPayload,
+  fontCss = '',
+) {
+  const courseLines = splitSvgText(courseTitle, 52).slice(0, 2);
+  const titleText = splitSvgText(certificateTitle, 60)[0]?.toUpperCase() || '';
+  const titleY = 626 + (courseLines.length - 1) * 46 + 54;
+  const nameSize = Math.min(86, Math.floor(1240 / Math.max(learnerName.length * 0.5, 1)));
+  const qr = premiumQrSvg(getCertificateVerifyUrl(certificateNumber), 744, 770, 112);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#e7e1ff"/>
-      <stop offset="100%" stop-color="#ddecee"/>
+    <style>${fontCss}</style>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f1ecff"/>
+      <stop offset="55%" stop-color="#f8f6ff"/>
+      <stop offset="100%" stop-color="#e6f1f3"/>
     </linearGradient>
-    <linearGradient id="seal" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f59e0b"/>
-      <stop offset="50%" stop-color="#fde68a"/>
-      <stop offset="100%" stop-color="#b45309"/>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5d57a"/>
+      <stop offset="50%" stop-color="#d4a017"/>
+      <stop offset="100%" stop-color="#9a6a05"/>
     </linearGradient>
   </defs>
   <rect width="1600" height="1000" fill="url(#bg)"/>
   <rect x="36" y="36" width="1528" height="928" rx="10" fill="none" stroke="#7c3aed" stroke-width="4"/>
-  <rect x="58" y="58" width="1484" height="884" rx="4" fill="none" stroke="#c4b5fd" stroke-width="2"/>
-  <path d="M84 150 V84 H150 M1516 150 V84 H1450 M84 850 V916 H150 M1516 850 V916 H1450" fill="none" stroke="#d4a017" stroke-width="5"/>
+  <rect x="58" y="58" width="1484" height="884" rx="4" fill="none" stroke="#d4a017" stroke-opacity="0.55" stroke-width="1.5"/>
+  <path d="M84 150 V84 H150 M1516 150 V84 H1450 M84 850 V916 H150 M1516 850 V916 H1450" fill="none" stroke="url(#gold)" stroke-width="5"/>
 
-  <g font-family="Inter, Arial, sans-serif" text-anchor="middle">
-    <text x="800" y="150" font-size="28" font-weight="800" letter-spacing="6" fill="#7c3aed">EASY MEDICAL DEVICE ACADEMY</text>
-    <text x="800" y="250" font-family="Georgia, serif" font-size="84" font-weight="700" letter-spacing="12" fill="#191b23">CERTIFICATE</text>
-    <text x="800" y="300" font-size="22" font-weight="700" letter-spacing="10" fill="#7c3aed">OF ACHIEVEMENT</text>
-    <line x1="660" y1="334" x2="770" y2="334" stroke="#d4a017" stroke-width="3"/>
-    <rect x="793" y="327" width="14" height="14" transform="rotate(45 800 334)" fill="#d4a017"/>
-    <line x1="830" y1="334" x2="940" y2="334" stroke="#d4a017" stroke-width="3"/>
+  <g text-anchor="middle">
+    <text x="800" y="132" font-family="Montserrat, Arial, sans-serif" font-size="25" font-weight="700" letter-spacing="8" fill="#7c3aed">EASY MEDICAL DEVICE ACADEMY</text>
+    <text x="800" y="236" font-family="Cinzel, Georgia, serif" font-size="92" font-weight="700" letter-spacing="14" fill="#1a1033">CERTIFICATE</text>
+    <text x="800" y="284" font-family="Montserrat, Arial, sans-serif" font-size="21" font-weight="600" letter-spacing="13" fill="#7c3aed">OF ACHIEVEMENT</text>
+    <line x1="660" y1="314" x2="770" y2="314" stroke="url(#gold)" stroke-width="3"/>
+    <rect x="793" y="307" width="14" height="14" transform="rotate(45 800 314)" fill="#d4a017"/>
+    <line x1="830" y1="314" x2="940" y2="314" stroke="url(#gold)" stroke-width="3"/>
 
-    <text x="800" y="395" font-size="20" font-weight="700" letter-spacing="4" fill="#64748b">THIS CERTIFICATE IS PROUDLY PRESENTED TO</text>
-    <text x="800" y="490" font-family="Georgia, serif" font-size="${nameSize}" font-weight="700" font-style="italic" fill="#3b0764">${escapeXml(learnerName)}</text>
-    <line x1="480" y1="522" x2="1120" y2="522" stroke="#d4a017" stroke-width="3"/>
+    <text x="800" y="368" font-family="Montserrat, Arial, sans-serif" font-size="17" font-weight="600" letter-spacing="5" fill="#64748b">THIS CERTIFICATE IS PROUDLY PRESENTED TO</text>
+    <text x="800" y="462" font-family="'Playfair Display', Georgia, serif" font-size="${nameSize}" font-weight="700" font-style="italic" fill="#3b0764">${escapeXml(learnerName)}</text>
+    <line x1="480" y1="492" x2="1120" y2="492" stroke="url(#gold)" stroke-width="3"/>
 
-    <text font-size="24" font-weight="500" fill="#475569">
-      <tspan x="800" y="580">has demonstrated mastery of medical device regulatory requirements</tspan>
-      <tspan x="800" y="614">and successfully completed the official certification exam for</tspan>
+    <text font-family="Montserrat, Arial, sans-serif" font-size="22" font-weight="500" fill="#475569">
+      <tspan x="800" y="548">has demonstrated mastery of medical device regulatory requirements</tspan>
+      <tspan x="800" y="582">and successfully completed the official certification exam for</tspan>
     </text>
-    <text font-family="Georgia, serif" font-size="38" font-weight="700" fill="#581c87">
-      ${svgTspans(courseLines, 800, 678, 48)}
+    <text font-family="'Playfair Display', Georgia, serif" font-size="40" font-weight="700" fill="#581c87">
+      ${svgTspans(courseLines, 800, 646, 46)}
     </text>
-    <text font-size="21" font-weight="600" fill="#334155">
-      ${svgTspans(titleLines, 800, 776, 28)}
-    </text>
+    <text x="800" y="${titleY + 20}" font-family="Montserrat, Arial, sans-serif" font-size="17" font-weight="700" letter-spacing="5" fill="#334155">${escapeXml(titleText)}</text>
   </g>
 
-  <g font-family="Inter, Arial, sans-serif">
-    <text x="190" y="846" font-size="16" font-weight="700" letter-spacing="3" fill="#64748b">ISSUE DATE</text>
-    <text x="190" y="884" font-size="26" font-weight="800" fill="#191b23">${escapeXml(issuedDate)}</text>
+  <g font-family="Montserrat, Arial, sans-serif">
+    <text x="190" y="846" font-size="14" font-weight="700" letter-spacing="4" fill="#64748b">ISSUE DATE</text>
+    <text x="190" y="886" font-size="25" font-weight="700" fill="#1a1033">${escapeXml(issuedDate)}</text>
 
-    <circle cx="800" cy="836" r="62" fill="url(#seal)" stroke="#fde68a" stroke-width="5"/>
-    <circle cx="800" cy="836" r="50" fill="none" stroke="#92400e" stroke-opacity="0.45" stroke-width="2"/>
-    <text x="800" y="848" text-anchor="middle" font-size="36" font-weight="900" fill="#3b2203">EMD</text>
-    <text x="800" y="920" text-anchor="middle" font-family="monospace" font-size="18" font-weight="700" fill="#6d28d9">Credential ID: ${escapeXml(certificateNumber)}</text>
+    <rect x="730" y="758" width="140" height="140" rx="20" fill="#ffffff" stroke="url(#gold)" stroke-width="3.5"/>
+    ${qr}
+    <line x1="636" y1="921" x2="696" y2="921" stroke="url(#gold)" stroke-width="2"/>
+    <line x1="904" y1="921" x2="964" y2="921" stroke="url(#gold)" stroke-width="2"/>
+    <text x="800" y="926" text-anchor="middle" font-size="13" font-weight="700" letter-spacing="4" fill="#6d28d9">SCAN TO VERIFY</text>
 
-    <text x="1410" y="858" text-anchor="end" font-family="Georgia, serif" font-size="38" font-weight="700" font-style="italic" fill="#3b0764">Monir El Azzouzi</text>
-    <line x1="1130" y1="874" x2="1410" y2="874" stroke="#7c3aed" stroke-width="3"/>
-    <text x="1410" y="900" text-anchor="end" font-size="17" font-weight="700" fill="#334155">Founder and CEO, Lead Regulatory Consultant</text>
+    <text x="1410" y="858" text-anchor="end" font-family="'Great Vibes', 'Brush Script MT', cursive" font-size="64" fill="#3b0764">Monir El Azzouzi</text>
+    <line x1="1130" y1="874" x2="1410" y2="874" stroke="#7c3aed" stroke-width="2.5"/>
+    <text x="1410" y="902" text-anchor="end" font-size="15" font-weight="600" fill="#334155">Founder and CEO, Lead Regulatory Consultant</text>
   </g>
 </svg>`;
 }
 
-export function downloadCertificatePdf(payload: CertificateSvgPayload) {
-  const blob = buildCertificatePdfBlob(payload);
+let certificateFontsPromise: Promise<string> | null = null;
+
+/** The certificate fonts are large, so they are loaded only when a certificate is shown. */
+export function loadCertificateFonts() {
+  certificateFontsPromise ??= import('@/lib/certificate-fonts').then(
+    (module) => module.CERTIFICATE_FONT_CSS,
+  );
+  return certificateFontsPromise;
+}
+
+export async function buildCertificateSvgWithFonts(
+  payload: CertificateSvgPayload,
+) {
+  return buildCertificateSvg(payload, await loadCertificateFonts());
+}
+
+function loadSvgImage(svg: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Certificate image failed to load.'));
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  });
+}
+
+async function renderCertificateJpeg(payload: CertificateSvgPayload) {
+  const image = await loadSvgImage(await buildCertificateSvgWithFonts(payload));
+  const canvas = document.createElement('canvas');
+  canvas.width = 3200;
+  canvas.height = 2000;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas is not available.');
+
+  // Embedded fonts can finish decoding just after load, so paint twice.
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, 'image/jpeg', 0.94),
+  );
+  if (!blob) throw new Error('Certificate could not be rendered.');
+
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+function buildJpegPdf(jpeg: Uint8Array) {
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  const offsets: number[] = [];
+  let length = 0;
+
+  const push = (data: string | Uint8Array) => {
+    const bytes = typeof data === 'string' ? encoder.encode(data) : data;
+    chunks.push(bytes);
+    length += bytes.length;
+  };
+  const object = (index: number, body: string | (() => void)) => {
+    offsets[index] = length;
+    push(`${index} 0 obj\n`);
+    if (typeof body === 'string') push(body);
+    else body();
+    push('\nendobj\n');
+  };
+
+  push('%PDF-1.4\n');
+  object(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  object(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+  object(
+    3,
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 526] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>',
+  );
+  object(4, () => {
+    push(
+      `<< /Type /XObject /Subtype /Image /Width 3200 /Height 2000 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`,
+    );
+    push(jpeg);
+    push('\nendstream');
+  });
+  const content = 'q 842 0 0 526 0 0 cm /Im0 Do Q';
+  object(5, `<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+
+  const xref = length;
+  push('xref\n0 6\n0000000000 65535 f \n');
+  for (let i = 1; i <= 5; i += 1) {
+    push(`${String(offsets[i]).padStart(10, '0')} 00000 n \n`);
+  }
+  push(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+
+  return new Blob(chunks as BlobPart[], { type: 'application/pdf' });
+}
+
+export async function downloadCertificatePdf(payload: CertificateSvgPayload) {
+  let blob: Blob;
+
+  try {
+    blob = buildJpegPdf(await renderCertificateJpeg(payload));
+  } catch {
+    // Canvas unavailable: fall back to the plain vector certificate.
+    blob = buildCertificatePdfBlob(payload);
+  }
+
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -331,7 +445,7 @@ export function openLinkedInCertificate({
     issueYear: String(issueDate.getFullYear()),
     issueMonth: String(issueDate.getMonth() + 1),
     certId: certificateNumber,
-    certUrl: `https://academy.easymedicaldevice.com/verify/${certificateNumber}`,
+    certUrl: getCertificateVerifyUrl(certificateNumber),
   });
   window.open(
     `https://www.linkedin.com/profile/add?${params.toString()}`,

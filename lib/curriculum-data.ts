@@ -3,6 +3,9 @@ export type LessonResource = {
   url?: string;
   size: string;
   type: string;
+  // Only used by type 'promo' (sponsored block shown under a lesson).
+  description?: string;
+  ctaLabel?: string;
 };
 
 export type TranscriptEntry = {
