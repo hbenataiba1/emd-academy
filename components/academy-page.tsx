@@ -26,6 +26,7 @@ import {
   Newspaper,
   PlayCircle,
   Search,
+  QrCode,
   ShieldCheck,
   Star,
   Stethoscope,
@@ -543,28 +544,45 @@ export function AcademyPage({
                 <span className="text-[#b58dfb]"> Easy Medical Device Academy</span>
               </h2>
 
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#9f98b2] sm:text-base">
-                Recognized by the global MedTech &amp; regulatory community, our certificates
-                validate your expertise in EU MDR, IVDR, ISO 13485 and SaMD compliance —
-                trusted by manufacturers and quality leaders worldwide.
+              <p className="mt-3 max-w-xl text-sm leading-relaxed text-[#b3acc7] sm:text-base">
+                Certificates that validate your expertise in medical device regulatory
+                compliance, from CE marking and FDA to ISO 13485 and SaMD.
               </p>
 
-              {/* Three feature pills */}
-              <div className="mt-6 flex flex-wrap justify-center gap-3 md:justify-start">
+              <ul className="mt-6 grid max-w-xl gap-x-6 gap-y-4 text-left sm:grid-cols-2">
                 {[
-                  { icon: <ShieldCheck className="size-4 text-[#34d4c6]" />, label: 'EU MDR Aligned' },
-                  { icon: <Award className="size-4 text-[#b58dfb]" />, label: 'Shareable on LinkedIn' },
-                  { icon: <GraduationCap className="size-4 text-[#f6b44b]" />, label: 'Industry Recognised' },
-                ].map(({ icon, label }) => (
-                  <span
-                    key={label}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white"
-                  >
-                    {icon}
-                    {label}
-                  </span>
+                  {
+                    icon: <QrCode className="size-5 text-[#34d4c6]" />,
+                    title: 'Verified by QR code',
+                    text: 'Scan to confirm the name, course and date.',
+                  },
+                  {
+                    icon: <Award className="size-5 text-[#b58dfb]" />,
+                    title: 'Shareable on LinkedIn',
+                    text: 'Add it to your profile in one click.',
+                  },
+                  {
+                    icon: <ShieldCheck className="size-5 text-[#34d4c6]" />,
+                    title: 'Standards aligned',
+                    text: 'Built on current regulations and standards.',
+                  },
+                  {
+                    icon: <GraduationCap className="size-5 text-[#f6b44b]" />,
+                    title: 'Industry recognised',
+                    text: 'Trusted by manufacturers and quality leaders.',
+                  },
+                ].map(({ icon, title, text }) => (
+                  <li key={title} className="flex items-start gap-3">
+                    <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                      {icon}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-bold text-white">{title}</span>
+                      <span className="block text-xs leading-5 text-[#b3acc7]">{text}</span>
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ul>
 
               <a
                 href="#courses"
