@@ -24,6 +24,22 @@ type CertificateBody = {
 // have earned it. Every certificate shown or downloaded comes from here, so the
 // QR code on it always leads to a record that exists.
 export async function POST(request: Request) {
+  try {
+    return await handleCertificateRequest(request);
+  } catch (error) {
+    return json(
+      {
+        message:
+          error instanceof Error && error.message
+            ? error.message
+            : 'The certificate could not be created.',
+      },
+      500,
+    );
+  }
+}
+
+async function handleCertificateRequest(request: Request) {
   const user = await getAcademyUserFromRequest(request);
   if (!user?.id || !user.email) {
     return json({ message: 'Please log in to get your certificate.' }, 401);

@@ -497,13 +497,21 @@ export function CoursePlayer({
           examPassed: true,
         }),
       });
-      const payload = (await response.json().catch(() => ({}))) as {
-        certificate?: IssuedCertificate;
-        message?: string;
-      };
+      const raw = await response.text();
+      let payload: { certificate?: IssuedCertificate; message?: string } = {};
+      try {
+        payload = JSON.parse(raw);
+      } catch {
+        // not JSON (for example an error page)
+      }
 
       if (!response.ok || !payload.certificate?.certificate_number) {
-        throw new Error(payload.message || 'The certificate could not be created.');
+        throw new Error(
+          payload.message ||
+            `The server answered with status ${response.status}${
+              raw && !raw.trim().startsWith('<') ? `: ${raw.slice(0, 160)}` : ''
+            }. If this is a new version, make sure it is fully deployed, then try again.`,
+        );
       }
 
       setIssuedCertificate(payload.certificate);
