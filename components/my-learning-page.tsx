@@ -407,9 +407,12 @@ export default function MyLearningPage() {
           return;
         }
 
+        // The server is the truth. What this browser remembers is only a fallback
+        // for when the server cannot be reached, so a reset or a change made on
+        // another device is never overridden by old local progress.
         setPayload({
           ...nextPayload,
-          courses: mergeLearningCourses(nextPayload.courses, localCourses),
+          courses: nextPayload.courses || [],
         });
       } catch {
         if (!cancelled) {

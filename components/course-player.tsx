@@ -780,13 +780,18 @@ export function CoursePlayer({
         const storedProgress = getStoredCourseProgress(courseId);
 
         if (!cancelled) {
-          const mergedLessons = new Set([
-            ...savedLessons,
-            ...(storedProgress?.completedLessonIds || []),
-          ]);
+          // Server progress is the truth. Local progress is used only when the
+          // server could not be read.
+          const mergedLessons = new Set(
+            profileResponse.ok
+              ? savedLessons
+              : [...savedLessons, ...(storedProgress?.completedLessonIds || [])],
+          );
           setCompletedLessonIds(mergedLessons);
           const resumeLesson =
-            allLessons.find((lesson) => lesson.id === storedProgress?.lastLessonId) ||
+            (mergedLessons.size > 0
+              ? allLessons.find((lesson) => lesson.id === storedProgress?.lastLessonId)
+              : undefined) ||
             allLessons.find((lesson) => !mergedLessons.has(lesson.id));
           if (resumeLesson) {
             setActiveLessonId(resumeLesson.id);
