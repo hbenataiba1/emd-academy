@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 
 import { AcademyFooter, AcademyHeader } from '@/components/academy-shell';
 import {
@@ -21,6 +21,7 @@ export function AcademyAuthPage({ mode }: AcademyAuthPageProps) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -186,15 +187,28 @@ export function AcademyAuthPage({ mode }: AcademyAuthPageProps) {
                   </Link>
                 ) : null}
               </span>
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                minLength={6}
-                className="mt-2 h-11 w-full rounded-lg border border-[#dcd5ee] bg-white px-3 text-sm outline-none focus:border-[#7c3aed] focus:ring-4 focus:ring-[#7c3aed]/12"
-                placeholder="Minimum 6 characters"
-              />
+              <span className="relative mt-2 block">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete={isSignup ? 'new-password' : 'current-password'}
+                  className="h-11 w-full rounded-lg border border-[#dcd5ee] bg-white pl-3 pr-11 text-sm outline-none focus:border-[#7c3aed] focus:ring-4 focus:ring-[#7c3aed]/12"
+                  placeholder="Minimum 6 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-[#8b849a] transition hover:bg-[#f4f0ff] hover:text-[#7c3aed]"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </span>
             </label>
 
             {message ? (

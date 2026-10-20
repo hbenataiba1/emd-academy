@@ -56,6 +56,7 @@ import {
 } from '@/lib/curriculum-data';
 import { useCertificatePreviewUrl } from '@/lib/use-certificate-preview';
 import { ArticleBody } from '@/components/article-body';
+import { ExamCelebration } from '@/components/exam-celebration';
 import { LessonPromoCard } from '@/components/lesson-promo-card';
 import { LessonResourceCard } from '@/components/lesson-resource-card';
 import { prepareArticleHtml } from '@/lib/article-html';
@@ -471,6 +472,13 @@ export function CoursePlayer({
     activeLesson?.type === 'quiz' &&
     quizMeta.certificateEnabled &&
     (quizPassed || completedLessonIds.has(activeLesson.id));
+  // The celebration plays once, right after the exam is passed, before the certificate.
+  const [celebrationDismissed, setCelebrationDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!quizSubmitted) setCelebrationDismissed(false);
+  }, [quizSubmitted]);
+
   const [certificateStatus, setCertificateStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [certificateError, setCertificateError] = useState('');
   const certificateRequested = useRef('');
@@ -2662,6 +2670,15 @@ export function CoursePlayer({
           </aside>
         )}
       </div>
+
+      {/* EXAM PASSED CELEBRATION */}
+      {quizPassed && !celebrationDismissed && activeLesson?.type === 'quiz' ? (
+        <ExamCelebration
+          score={quizScore}
+          courseTitle={curriculum.title}
+          onContinue={() => setCelebrationDismissed(true)}
+        />
+      ) : null}
 
       {/* RATING MODAL */}
       {ratingModalOpen && (

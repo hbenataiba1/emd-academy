@@ -168,3 +168,57 @@ body {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* Exam-passed celebration */
+@keyframes celebrate-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes celebrate-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes celebrate-draw {
+  from { stroke-dashoffset: var(--celebrate-length); }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes celebrate-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes celebrate-pulse {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+@keyframes celebrate-glow {
+  0%, 100% { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.9; transform: translate(-50%, -50%) scale(1.08); }
+}
+
+@keyframes celebrate-countdown {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+.celebrate-backdrop { animation: celebrate-fade 0.35s ease-out both; }
+.celebrate-pop { animation: celebrate-pop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.1s both; }
+.celebrate-ring { --celebrate-length: 327; stroke-dasharray: 327; animation: celebrate-draw 0.9s ease-out 0.2s both; }
+.celebrate-check { --celebrate-length: 70; stroke-dasharray: 70; animation: celebrate-draw 0.5s ease-out 0.85s both; }
+.celebrate-rise { opacity: 0; animation: celebrate-rise 0.65s ease-out both; }
+.celebrate-pulse { animation: celebrate-pulse 1.8s ease-out 1.2s infinite; }
+.celebrate-pulse-late { animation-delay: 2.1s; }
+.celebrate-glow { animation: celebrate-glow 4s ease-in-out infinite; }
+.celebrate-countdown { animation-name: celebrate-countdown; animation-timing-function: linear; animation-fill-mode: both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .celebrate-pop, .celebrate-ring, .celebrate-check, .celebrate-rise,
+  .celebrate-pulse, .celebrate-glow, .celebrate-countdown { animation: none; opacity: 1; }
+  .celebrate-ring, .celebrate-check { stroke-dasharray: none; }
+  .celebrate-pulse, .celebrate-glow { display: none; }
+}
