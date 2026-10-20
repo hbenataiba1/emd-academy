@@ -259,6 +259,8 @@ export function CoursePlayer({
     'checking' | 'ready' | 'blocked' | 'preview'
   >('checking');
   const [accessMessage, setAccessMessage] = useState('');
+  // The course itself could not be found (not a payment problem).
+  const [courseMissing, setCourseMissing] = useState(false);
   const [checkoutPending, setCheckoutPending] = useState(false);
 
   // Track completed lessons
@@ -757,6 +759,15 @@ export function CoursePlayer({
           return;
         }
 
+        if (enrollResponse.status === 404) {
+          setCourseMissing(true);
+          setAccessState('blocked');
+          setAccessMessage(
+            'This course is no longer available, or the link is out of date. Please choose it again from the course catalog.',
+          );
+          return;
+        }
+
         if (!enrollResponse.ok) {
           if (freeCourse) {
             setAccessState('ready');
@@ -1088,12 +1099,14 @@ export function CoursePlayer({
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#34d4c6]">
             Easy Medical Device Academy
           </p>
-          <h1 className="mt-3 text-3xl font-black">Course access required</h1>
+          <h1 className="mt-3 text-3xl font-black">
+            {courseMissing ? 'Course not found' : 'Course access required'}
+          </h1>
           <p className="mt-3 text-sm leading-6 text-[#bfb7d4]">
             {accessMessage || 'Sign in or complete checkout to unlock this course.'}
           </p>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            {!academySession ? (
+            {courseMissing ? null : !academySession ? (
               <>
                 <Link
                   href={`/academy/login?next=${encodeURIComponent(`/academy/learn/${courseId}`)}`}
