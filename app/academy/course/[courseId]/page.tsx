@@ -5,6 +5,7 @@ import { JsonLd } from '@/components/json-ld';
 import { CourseDetailPage } from '@/components/course-detail-page';
 import { getCurriculumForCourse } from '@/lib/curriculum-data';
 import { ACADEMY_URL, SITE_URL } from '@/lib/site';
+import { decodeRouteParam } from '@/lib/route-params';
 import { getPublishedCoursesFromSupabase } from '@/lib/supabase';
 
 type CourseDetailRouteProps = {
@@ -26,8 +27,8 @@ async function resolveCourse(courseId: string) {
 export async function generateMetadata({
   params,
 }: CourseDetailRouteProps): Promise<Metadata> {
-  const { courseId } = await params;
-  const course = await resolveCourse(courseId);
+  const { courseId: rawCourseId } = await params;
+  const course = await resolveCourse(decodeRouteParam(rawCourseId));
 
   if (!course) {
     return { title: 'Course not found', robots: { index: false } };
@@ -54,7 +55,7 @@ export default async function AcademyCourseDetailRoute({
   params,
 }: CourseDetailRouteProps) {
   const resolvedParams = await params;
-  const course = await resolveCourse(resolvedParams.courseId);
+  const course = await resolveCourse(decodeRouteParam(resolvedParams.courseId));
 
   if (!course) {
     notFound();

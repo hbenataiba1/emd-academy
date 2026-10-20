@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import { AcademyCheckoutPage } from '@/components/academy-checkout-page';
 import { isFreeCourse } from '@/lib/academy-auth';
+import { decodeRouteParam } from '@/lib/route-params';
 import { getPublishedCoursesFromSupabase } from '@/lib/supabase';
 
 export const metadata: Metadata = {
@@ -17,7 +18,8 @@ type CheckoutRouteProps = {
 };
 
 export default async function CheckoutRoute({ params }: CheckoutRouteProps) {
-  const { courseId } = await params;
+  const { courseId: rawCourseId } = await params;
+  const courseId = decodeRouteParam(rawCourseId);
   const courses = await getPublishedCoursesFromSupabase();
   const course = courses?.find(
     (item) => item.id === courseId || item.slug === courseId,
