@@ -80,6 +80,132 @@ export function getAcademyAvatarUrl(session: AcademySession | null) {
     : null;
 }
 
+// ── Keeping the login alive ───────────────────────────────────────────────────
+// Supabase access tokens last about an hour. The renewal token saved at login is
+// used here to get a new one before (or right after) the old one stops working.
+
+let refreshInFlight: Promise<AcademySession | null> | null = null;
+
+function readTokenExpiry(session: AcademySession) {
+  if (session.expires_at) return session.expires_at;
+
+  try {
+    const payload = session.access_token.split('.')[1] || '';
+    const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof json.exp === 'number' ? (json.exp as number) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Gets a new access token with the saved renewal token. Null if that fails. */
+export async function refreshAcademySession(): Promise<AcademySession | null> {
+  const session = getStoredAcademySession();
+  const config = getPublicSupabaseConfig();
+  if (!session?.refresh_token || !config) return null;
+
+  if (!refreshInFlight) {
+    const refreshToken = session.refresh_token;
+
+    refreshInFlight = (async () => {
+      try {
+        const response = await fetch(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
+          method: 'POST',
+          headers: { apikey: config.anonKey, 'content-type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+        if (!response.ok) return null;
+
+        const payload = (await response.json().catch(() => ({}))) as {
+          access_token?: string;
+          refresh_token?: string;
+          expires_in?: number;
+          user?: AcademySession['user'];
+        };
+        if (!payload.access_token) return null;
+
+        const next: AcademySession = {
+          access_token: payload.access_token,
+          refresh_token: payload.refresh_token || refreshToken,
+          expires_at: payload.expires_in
+            ? Math.floor(Date.now() / 1000) + payload.expires_in
+            : undefined,
+          user: payload.user || session.user,
+        };
+        saveAcademySession(next);
+        return next;
+      } catch {
+        return null;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
+  }
+
+  return refreshInFlight;
+}
+
+/** The stored session, renewed first if it expires within two minutes. */
+export async function ensureFreshAcademySession(): Promise<AcademySession | null> {
+  const session = getStoredAcademySession();
+  if (!session) return null;
+
+  const expiry = readTokenExpiry(session);
+  if (!expiry || expiry - Math.floor(Date.now() / 1000) > 120) return session;
+
+  return (await refreshAcademySession()) || session;
+}
+
+const ACADEMY_API_PATH = /^\/(api\/academy|api\/checkout)(\/|$)/;
+
+/**
+ * Wraps fetch so every call to the academy API carries a fresh login token, and
+ * is retried once with a renewed token if the server says the login expired.
+ */
+export function installAcademyFetchAuth() {
+  if (typeof window === 'undefined') return;
+
+  const flagged = window as unknown as { __academyFetchAuth?: boolean };
+  if (flagged.__academyFetchAuth) return;
+  flagged.__academyFetchAuth = true;
+
+  const original = window.fetch.bind(window);
+
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    let target: URL | null = null;
+
+    try {
+      if (typeof input === 'string' || input instanceof URL) {
+        target = new URL(String(input), window.location.origin);
+      }
+    } catch {
+      target = null;
+    }
+
+    const isAcademyApi =
+      target !== null &&
+      target.origin === window.location.origin &&
+      ACADEMY_API_PATH.test(target.pathname);
+    const headers = new Headers(init?.headers);
+
+    if (!isAcademyApi || !headers.has('authorization')) {
+      return original(input, init);
+    }
+
+    const fresh = await ensureFreshAcademySession();
+    if (fresh) headers.set('authorization', `Bearer ${fresh.access_token}`);
+
+    const response = await original(input, { ...init, headers });
+    if (response.status !== 401) return response;
+
+    const renewed = await refreshAcademySession();
+    if (!renewed || renewed.access_token === fresh?.access_token) return response;
+
+    headers.set('authorization', `Bearer ${renewed.access_token}`);
+    return original(input, { ...init, headers });
+  };
+}
+
 export async function updateAcademyProfile({
   fullName,
   avatarUrl,
