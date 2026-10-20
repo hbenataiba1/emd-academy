@@ -55,6 +55,7 @@ import {
   getCurriculumForCourse,
 } from '@/lib/curriculum-data';
 import { useCertificatePreviewUrl } from '@/lib/use-certificate-preview';
+import { ArticleBody } from '@/components/article-body';
 import { LessonPromoCard } from '@/components/lesson-promo-card';
 import { LessonResourceCard } from '@/components/lesson-resource-card';
 import { prepareArticleHtml } from '@/lib/article-html';
@@ -224,10 +225,15 @@ export function CoursePlayer({
   freeCourse = false,
 }: CoursePlayerProps) {
   const [curriculum, setCurriculum] = useState<CourseCurriculum>(() => getCurriculumForCourse(courseId));
+  // The built-in curriculum above is only a fallback. The player waits for the
+  // real lessons before drawing anything, so a sample video lesson never flashes
+  // up in front of an article.
+  const [curriculumReady, setCurriculumReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     let active = true;
+    setCurriculumReady(false);
     fetch(`/api/academy/curriculum?courseId=${encodeURIComponent(courseId)}`)
       .then((res) => res.json())
       .then((data: any) => {
@@ -235,7 +241,10 @@ export function CoursePlayer({
           setCurriculum(data.curriculum);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (active) setCurriculumReady(true);
+      });
     return () => {
       active = false;
     };
@@ -287,6 +296,13 @@ export function CoursePlayer({
       ),
     [activeLesson],
   );
+  const articleHtml = useMemo(
+    () =>
+      activeLesson?.type === 'article' && activeLesson.description
+        ? prepareArticleHtml(activeLesson.description)
+        : '',
+    [activeLesson],
+  );
   const activePromo = useMemo(() => {
     const promo = (activeLesson?.resources || []).find(
       (resource) => resource.type === 'promo' && resource.name,
@@ -334,6 +350,16 @@ export function CoursePlayer({
     }
   }, [allLessons, activeLesson, courseId, hasFullAccess, isPreviewMode, previewLessons]);
 
+  // If the selected lesson is not part of the loaded curriculum, pick a valid one.
+  useEffect(() => {
+    if (!curriculumReady || allLessons.length === 0) return;
+    if (allLessons.some((lesson) => lesson.id === activeLessonId)) return;
+
+    const fallback =
+      allLessons.find((lesson) => !completedLessonIds.has(lesson.id)) || allLessons[0];
+    setActiveLessonId(fallback.id);
+  }, [curriculumReady, allLessons, activeLessonId, completedLessonIds]);
+
   // Reset playback on lesson change
   useEffect(() => {
     setCurrentTime(0);
@@ -348,13 +374,18 @@ export function CoursePlayer({
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const [readProgress, setReadProgress] = useState(0);
 
+  const scrollFrameRef = useRef<number | null>(null);
   const handleMainScroll = () => {
-    const element = mainScrollRef.current;
-    if (!element) return;
-    const scrollable = element.scrollHeight - element.clientHeight;
-    setReadProgress(
-      scrollable > 0 ? Math.min(100, Math.round((element.scrollTop / scrollable) * 100)) : 100,
-    );
+    if (scrollFrameRef.current !== null) return;
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const element = mainScrollRef.current;
+      if (!element) return;
+      const scrollable = element.scrollHeight - element.clientHeight;
+      setReadProgress(
+        scrollable > 0 ? Math.min(100, Math.round((element.scrollTop / scrollable) * 100)) : 100,
+      );
+    });
   };
 
   // Keep the selected lesson visible in the curriculum sidebar.
@@ -430,18 +461,68 @@ export function CoursePlayer({
     .filter((index): index is number => index !== null);
   const allQuizQuestionsAnswered =
     quizQuestions.length > 0 && answeredQuizCount === quizQuestions.length;
-  const certificateNumber =
-    issuedCertificate?.certificate_number ||
-    `EMDA-${new Date().getFullYear()}-${courseId
-      .slice(0, 4)
-      .toUpperCase()}-${(academySession?.user.id || 'ACADEMY')
-      .slice(0, 8)
-      .toUpperCase()}`;
+  // The certificate number always comes from the server record, so the QR code
+  // on the certificate leads to a certificate that exists.
+  const certificateNumber = issuedCertificate?.certificate_number || '';
   const certificateIssuedDate = formatCertificateDate(issuedCertificate?.issued_at);
   const quizCertificateReady =
     activeLesson?.type === 'quiz' &&
     quizMeta.certificateEnabled &&
     (quizPassed || completedLessonIds.has(activeLesson.id));
+  const [certificateStatus, setCertificateStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [certificateError, setCertificateError] = useState('');
+  const certificateRequested = useRef('');
+
+  const requestCertificate = async (force = false) => {
+    const session = academySession || getStoredAcademySession();
+    if (!session || !activeLesson) return;
+
+    const requestKey = `${courseId}:${activeLesson.id}`;
+    if (!force && certificateRequested.current === requestKey) return;
+    certificateRequested.current = requestKey;
+
+    setCertificateStatus('loading');
+    setCertificateError('');
+
+    try {
+      const response = await fetch('/api/academy/certificate', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...getAcademyAuthHeader(session),
+        },
+        body: JSON.stringify({
+          courseId,
+          lessonId: activeLesson.id,
+          examPassed: true,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        certificate?: IssuedCertificate;
+        message?: string;
+      };
+
+      if (!response.ok || !payload.certificate?.certificate_number) {
+        throw new Error(payload.message || 'The certificate could not be created.');
+      }
+
+      setIssuedCertificate(payload.certificate);
+      setCertificateStatus('idle');
+    } catch (error) {
+      setCertificateStatus('error');
+      setCertificateError(
+        error instanceof Error ? error.message : 'The certificate could not be created.',
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (quizCertificateReady && !issuedCertificate?.certificate_number) {
+      void requestCertificate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizCertificateReady, issuedCertificate, activeLesson?.id]);
+
   const certificatePreviewUrl = useCertificatePreviewUrl(
     {
       learnerName,
@@ -450,7 +531,7 @@ export function CoursePlayer({
       certificateNumber,
       issuedDate: certificateIssuedDate,
     },
-    quizCertificateReady,
+    quizCertificateReady && Boolean(certificateNumber),
   );
 
   useEffect(() => {
@@ -617,6 +698,8 @@ export function CoursePlayer({
   }, [academySession, courseId, curriculum.instructor, curriculum.title, totalLessonsCount]);
 
   useEffect(() => {
+    if (!curriculumReady) return;
+
     const session = getStoredAcademySession();
     setAcademySession(session);
 
@@ -719,7 +802,7 @@ export function CoursePlayer({
     return () => {
       cancelled = true;
     };
-  }, [courseId, freeCourse, previewLessons.length]);
+  }, [courseId, freeCourse, previewLessons.length, curriculumReady]);
 
   // Playback timer simulation
   useEffect(() => {
@@ -908,30 +991,9 @@ export function CoursePlayer({
       return;
     }
 
+    // Paid course: continue on our own checkout page (payment form on this site).
     setCheckoutPending(true);
-    try {
-      const response = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...getAcademyAuthHeader(session),
-        },
-        body: JSON.stringify({ courseId }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as {
-        url?: string;
-        message?: string;
-      };
-
-      if (payload.url) {
-        window.location.assign(payload.url);
-        return;
-      }
-
-      setAccessMessage(payload.message || 'Checkout could not be opened.');
-    } finally {
-      setCheckoutPending(false);
-    }
+    window.location.assign(`/academy/checkout/${encodeURIComponent(courseId)}`);
   };
 
   const toggleSectionExpand = (sectionId: string) => {
@@ -997,7 +1059,7 @@ export function CoursePlayer({
     setShowAskForm(false);
   };
 
-  if (academySession === undefined || accessState === 'checking') {
+  if (!curriculumReady || academySession === undefined || accessState === 'checking') {
     return (
       <PlayerSkeleton />
     );
@@ -1179,7 +1241,7 @@ export function CoursePlayer({
           {activeLesson?.type === 'article' ? (
             <div className="sticky top-0 z-20 h-1 w-full shrink-0 bg-white/10">
               <div
-                className="h-full bg-gradient-to-r from-[#7c3aed] to-[#34d4c6] transition-[width] duration-150"
+                className="h-full bg-gradient-to-r from-[#7c3aed] to-[#34d4c6]"
                 style={{ width: `${readProgress}%` }}
               />
             </div>
@@ -1232,38 +1294,7 @@ export function CoursePlayer({
                 <div className="rounded-xl bg-white p-5 shadow-2xl shadow-black/30 sm:p-8">
                   {activeLesson.description ? (
                     /<(h[1-6]|p|div|ul|ol|blockquote|strong|b|em|i|br|hr|img|iframe|table)/i.test(activeLesson.description) ? (
-                      <div
-                        className="text-[16px] leading-8 text-[#334155]
-                          [&_h1]:mt-8 [&_h1]:mb-4 [&_h1]:border-b [&_h1]:border-[#e9d5ff] [&_h1]:pb-3 [&_h1]:text-3xl [&_h1]:font-black [&_h1]:leading-tight [&_h1]:text-[#7e22ce] first:[&_h1]:mt-0
-                          [&_h2]:mt-7 [&_h2]:mb-3 [&_h2]:text-2xl [&_h2]:font-black [&_h2]:leading-tight [&_h2]:text-[#0f766e]
-                          [&_h3]:mt-6 [&_h3]:mb-2 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:text-[#b45309]
-                          [&_h4]:mt-5 [&_h4]:mb-2 [&_h4]:text-lg [&_h4]:font-bold [&_h4]:text-[#be185d]
-                          [&_h5]:mt-4 [&_h5]:mb-2 [&_h5]:font-bold [&_h5]:text-[#1d4ed8]
-                          [&_h6]:mt-4 [&_h6]:mb-2 [&_h6]:font-bold [&_h6]:text-[#475569]
-                          [&_p]:mb-4
-                          [&_blockquote]:my-5 [&_blockquote]:rounded-r-xl [&_blockquote]:border-l-4 [&_blockquote]:border-[#7c3aed] [&_blockquote]:bg-[#f5f3ff] [&_blockquote]:p-4 [&_blockquote]:text-[#3b0764]
-                          [&_blockquote[class*=emerald]]:border-[#10b981] [&_blockquote[class*=emerald]]:bg-[#ecfdf5] [&_blockquote[class*=emerald]]:text-[#064e3b]
-                          [&_blockquote[class*=amber]]:border-[#f59e0b] [&_blockquote[class*=amber]]:bg-[#fffbeb] [&_blockquote[class*=amber]]:text-[#78350f]
-                          [&_ul]:my-4 [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-6
-                          [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:space-y-2 [&_ol]:pl-6
-                          [&_li]:pl-1
-                          [&_strong]:font-black [&_strong]:text-[#0f172a]
-                          [&_b]:font-black [&_b]:text-[#0f172a]
-                          [&_hr]:my-6 [&_hr]:border-[#e2e8f0]
-                          [&_mark]:rounded [&_mark]:bg-[#fde68a] [&_mark]:px-1 [&_mark]:text-[#0f172a]
-                          [&_a]:font-bold [&_a]:text-[#7c3aed] [&_a]:underline
-                          [&_code]:rounded [&_code]:bg-[#f1f5f9] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-sm [&_code]:font-bold [&_code]:text-[#7c3aed]
-                          [&_img]:my-5 [&_img]:block [&_img]:mx-auto! [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-xl
-                          [&_iframe]:max-w-full
-                          [&_table]:w-full [&_table]:border-collapse [&_table]:text-[15px] [&_table]:leading-6
-                          [&_th]:border [&_th]:border-[#cbd5e1] [&_th]:bg-[#f5f3ff] [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:font-bold [&_th]:text-[#3b0764]
-                          [&_td]:border [&_td]:border-[#cbd5e1] [&_td]:px-3 [&_td]:py-2 [&_td]:align-top
-                          [&_tbody_tr:nth-child(even)_td]:bg-[#faf9ff]
-                          [&_td_p]:mb-0 [&_th_p]:mb-0"
-                        dangerouslySetInnerHTML={{
-                          __html: prepareArticleHtml(activeLesson.description),
-                        }}
-                      />
+                      <ArticleBody html={articleHtml} />
                     ) : (
                       <p className="whitespace-pre-wrap text-[16px] leading-8 text-[#334155]">
                         {activeLesson.description}
@@ -1289,12 +1320,15 @@ export function CoursePlayer({
                             Exam passed
                           </p>
                           <h1 className="mt-2 text-2xl font-black text-white sm:text-4xl">
-                            Your certificate is ready
+                            {certificateNumber ? 'Your certificate is ready' : 'Preparing your certificate...'}
                           </h1>
-                          <p className="mt-2 text-sm text-[#b8b0cf]">
-                            Credential ID: {certificateNumber}
-                          </p>
+                          {certificateNumber ? (
+                            <p className="mt-2 text-sm text-[#b8b0cf]">
+                              Credential ID: {certificateNumber}
+                            </p>
+                          ) : null}
                         </div>
+                        {certificateNumber ? (
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -1313,8 +1347,10 @@ export function CoursePlayer({
                             Add to LinkedIn
                           </button>
                         </div>
+                        ) : null}
                       </div>
 
+                      {certificateNumber ? (
                       <div className="rounded-2xl bg-gradient-to-br from-[#3b0764] via-[#581c87] to-[#1e0847] p-2 shadow-2xl">
                         <div className="overflow-hidden rounded-xl bg-white">
                           <img
@@ -1324,6 +1360,29 @@ export function CoursePlayer({
                           />
                         </div>
                       </div>
+                      ) : (
+                        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+                          {certificateStatus === 'error' ? (
+                            <>
+                              <p className="text-sm font-bold text-[#ffb4b4]">
+                                We could not register your certificate yet.
+                              </p>
+                              <p className="mt-1 text-xs text-[#c4bdd8]">{certificateError}</p>
+                              <button
+                                type="button"
+                                onClick={() => void requestCertificate(true)}
+                                className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-[#7c3aed] px-5 text-sm font-bold text-white transition hover:bg-[#6d31dc]"
+                              >
+                                Try again
+                              </button>
+                            </>
+                          ) : (
+                            <p className="text-sm font-semibold text-[#c4bdd8]">
+                              Registering your certificate so it can be verified. One moment...
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <>
@@ -1572,7 +1631,7 @@ export function CoursePlayer({
                       <p className="mt-1 text-xs leading-5 text-[#b8b0cf]">
                         {quizSubmitted
                           ? quizPassed
-                            ? `${quizMeta.certificateTitle} is ready. Credential ID: ${certificateNumber}.`
+                            ? `${quizMeta.certificateTitle} is ready${certificateNumber ? `. Credential ID: ${certificateNumber}` : ''}.`
                             : `Questions to revise: ${incorrectQuizQuestionNumbers
                                 .map((questionNumber) => `Question ${questionNumber}`)
                                 .join(', ')}. Review the course, then retake the exam. Passing score is ${quizMeta.passingScore}%.`
@@ -1912,7 +1971,7 @@ export function CoursePlayer({
           ) : null}
 
           {activeLesson?.type === 'article' ? (
-            <div className="sticky bottom-0 z-20 shrink-0 border-t border-white/10 bg-[#14101e]/95 px-4 py-3 backdrop-blur sm:px-6">
+            <div className="sticky bottom-0 z-20 shrink-0 border-t border-white/10 bg-[#14101e] px-4 py-3 sm:px-6">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 text-xs text-[#c4bdd8]">
                   <p className="font-bold text-white">

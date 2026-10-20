@@ -4,6 +4,7 @@ import {
   json,
   saveAcademyEnrollment,
 } from '@/lib/academy-auth';
+import { markRedemptionRedeemed } from '@/lib/academy-coupons';
 
 type StripeCheckoutSession = {
   id: string;
@@ -17,6 +18,7 @@ type StripeCheckoutSession = {
     learner_email?: string;
     course_id?: string;
     course_title?: string;
+    coupon_id?: string;
   };
 };
 
@@ -77,6 +79,11 @@ async function markCheckoutComplete(session: StripeCheckoutSession) {
     status: 'active',
   });
 
+  // A coupon only counts as used once the payment has completed.
+  if (session.metadata?.coupon_id) {
+    await markRedemptionRedeemed(session.id);
+  }
+
   await academyRestFetch('purchases?on_conflict=stripe_checkout_session_id', {
     method: 'POST',
     body: JSON.stringify({
@@ -86,7 +93,7 @@ async function markCheckoutComplete(session: StripeCheckoutSession) {
       amount_cents: amountCents,
       currency,
       stripe_checkout_session_id: session.id,
-      stripe_payment_intent:
+      stripe_payment_intent_id:
         typeof session.payment_intent === 'string'
           ? session.payment_intent
           : null,

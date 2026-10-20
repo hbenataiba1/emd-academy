@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Globe,
   GraduationCap,
+  Receipt,
   Laptop,
   ListChecks,
   LogOut,
@@ -162,7 +163,7 @@ const mainSiteMenu: MainMenuItem[] = [
 export function AcademyHeader({
   activePage = "home",
 }: {
-  activePage?: "home" | "my-learning" | "auth" | "profile";
+  activePage?: "home" | "my-learning" | "auth" | "profile" | "billing";
 } = {}) {
   const [activeMegaMenu, setActiveMegaMenu] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<string | null>(null);
@@ -524,6 +525,19 @@ export function AcademyHeader({
                       >
                         <GraduationCap className="size-4 text-[#7c3aed]" />
                         <span>My Learning</span>
+                      </Link>
+
+                      <Link
+                        href="/academy/billing"
+                        onClick={() => setProfileOpen(false)}
+                        className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                          activePage === "billing"
+                            ? "bg-[#f4f0ff] font-bold text-[#7c3aed]"
+                            : "text-[#302945] hover:bg-[#f8f6ff] hover:text-[#6b34e9]"
+                        }`}
+                      >
+                        <Receipt className="size-4 text-[#7c3aed]" />
+                        <span>Billing &amp; invoices</span>
                       </Link>
                     </div>
 

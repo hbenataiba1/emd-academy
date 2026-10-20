@@ -259,13 +259,19 @@ export function AcademyPage({
       return;
     }
 
+    // Paid course: the payment form is shown on our own checkout page.
+    if (!isFree) {
+      window.location.assign(
+        `/academy/checkout/${encodeURIComponent(course?.slug || courseId)}`,
+      );
+      return;
+    }
+
     setPendingCourse(courseId);
     setCheckoutNotice({
       courseId,
       kind: 'info',
-      message: isFree
-        ? 'Opening your free course...'
-        : 'Preparing secure checkout...',
+      message: 'Opening your free course...',
     });
 
     try {

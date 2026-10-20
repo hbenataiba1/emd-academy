@@ -171,10 +171,51 @@ function CourseCard({
 }) {
   const done = course.progress === 100;
   const certificateTitle = 'Certificate of Completion';
+  const [ensured, setEnsured] = useState<{ number: string; issuedAt: string } | null>(null);
+  const [certificateBusy, setCertificateBusy] = useState(false);
+  const [certificateError, setCertificateError] = useState('');
   const certificateNumber =
-    course.certificate?.certificate_number ||
-    `EMDA-${new Date().getFullYear()}-${course.id.slice(0, 4).toUpperCase()}-${(userId || 'ACADEMY').slice(0, 8).toUpperCase()}`;
-  const issuedAt = course.certificate?.issued_at;
+    course.certificate?.certificate_number || ensured?.number || '';
+  const issuedAt = course.certificate?.issued_at || ensured?.issuedAt;
+
+  // Certificates only exist once the server has a record, so the QR code on them
+  // can always be verified.
+  const getCertificate = async () => {
+    const session = getStoredAcademySession();
+    setCertificateBusy(true);
+    setCertificateError('');
+
+    try {
+      const response = await fetch('/api/academy/certificate', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...getAcademyAuthHeader(session),
+        },
+        body: JSON.stringify({ courseId: course.id }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        certificate?: { certificate_number: string; issued_at: string };
+        message?: string;
+      };
+
+      if (!response.ok || !payload.certificate) {
+        setCertificateError(
+          payload.message || 'Open the course and pass the exam to get your certificate.',
+        );
+        return;
+      }
+
+      setEnsured({
+        number: payload.certificate.certificate_number,
+        issuedAt: payload.certificate.issued_at,
+      });
+    } catch {
+      setCertificateError('Network error. Please try again.');
+    } finally {
+      setCertificateBusy(false);
+    }
+  };
 
   const downloadCertificate = () =>
     downloadCertificatePdf({
@@ -253,11 +294,30 @@ function CourseCard({
           <div className="rounded-lg border border-[#bdeee9] bg-[#effbf9] p-3">
             <p className="flex items-center gap-1.5 text-xs font-bold text-[#067b75]">
               <Award className="size-4" />
-              Certificate ready
+              {certificateNumber ? 'Certificate ready' : 'Certificate'}
             </p>
-            <p className="mt-0.5 truncate font-mono text-[11px] text-[#3f8f8a]">
-              {certificateNumber}
-            </p>
+            {certificateNumber ? (
+              <p className="mt-0.5 truncate font-mono text-[11px] text-[#3f8f8a]">
+                {certificateNumber}
+              </p>
+            ) : (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={getCertificate}
+                  disabled={certificateBusy}
+                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-[#067b75] px-2 py-2 text-xs font-bold text-white transition hover:bg-[#056560] disabled:opacity-60"
+                >
+                  {certificateBusy ? 'Getting your certificate...' : 'Get my certificate'}
+                </button>
+                {certificateError ? (
+                  <p className="mt-1.5 text-[11px] font-semibold text-[#a53232]">
+                    {certificateError}
+                  </p>
+                ) : null}
+              </div>
+            )}
+            {certificateNumber ? (
             <div className="mt-2.5 grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -276,6 +336,7 @@ function CourseCard({
                 LinkedIn
               </button>
             </div>
+            ) : null}
           </div>
         ) : null}
         <Link

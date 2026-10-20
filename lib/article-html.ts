@@ -59,6 +59,8 @@ function cleanStyle(style: string) {
 
 export function prepareArticleHtml(html: string) {
   return html
+    // Embedded players load once and stay put (no lazy loading while scrolling).
+    .replace(/(<iframe\b[^>]*?)\sloading="lazy"/gi, '$1')
     // Wide tables scroll sideways instead of breaking the page layout.
     .replace(/<table\b/gi, '<div style="overflow-x:auto;margin:20px 0"><table')
     .replace(/<\/table>/gi, '</table></div>')
