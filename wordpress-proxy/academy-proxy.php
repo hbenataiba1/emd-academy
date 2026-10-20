@@ -24,18 +24,25 @@ $body = in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)
     : null;
 
 // Forward the useful request headers.
-$forward = [];
+// Each header is sent exactly once (keyed by lower-case name). Sending the
+// Authorization header twice makes Vercel answer "400 Bad request".
+$headers = [];
 $pass = ['accept', 'accept-language', 'authorization', 'content-type', 'cookie', 'user-agent', 'range', 'if-none-match'];
 foreach (getallheaders() as $name => $value) {
-    if (in_array(strtolower($name), $pass, true)) {
-        $forward[] = "$name: $value";
+    $lower = strtolower($name);
+    if (in_array($lower, $pass, true) && !isset($headers[$lower])) {
+        $headers[$lower] = "$name: $value";
     }
 }
-if (!empty($_SERVER['HTTP_AUTHORIZATION']) || !empty($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
-    $forward[] = 'Authorization: ' . ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']);
+// Some servers hide Authorization from getallheaders(); read it from the environment.
+$auth = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+if ($auth !== '' && !isset($headers['authorization'])) {
+    $headers['authorization'] = 'Authorization: ' . $auth;
 }
-$forward[] = 'X-Forwarded-Host: ' . $_SERVER['HTTP_HOST'];
-$forward[] = 'X-Forwarded-Proto: https';
+$headers['x-forwarded-host'] = 'X-Forwarded-Host: ' . $_SERVER['HTTP_HOST'];
+$headers['x-forwarded-proto'] = 'X-Forwarded-Proto: https';
+$headers['expect'] = 'Expect:'; // do not send "100-continue" with request bodies
+$forward = array_values($headers);
 
 $responseHeaders = [];
 $ch = curl_init(ORIGIN . $uri);
