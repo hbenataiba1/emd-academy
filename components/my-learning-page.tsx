@@ -393,7 +393,7 @@ export default function MyLearningPage() {
         if (!response.ok) {
           setMessage(
             localCourses.length
-              ? null
+              ? "We could not refresh your progress from the server, so this shows what is saved on this device. It may be out of date."
               : nextPayload.message || 'Could not load your learning.',
           );
           setPayload({
@@ -418,7 +418,7 @@ export default function MyLearningPage() {
         if (!cancelled) {
           setMessage(
             localCourses.length
-              ? null
+              ? "We could not refresh your progress from the server, so this shows what is saved on this device. It may be out of date."
               : 'Could not load your learning right now.',
           );
           setPayload({
