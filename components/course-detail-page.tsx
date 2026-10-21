@@ -329,13 +329,8 @@ export function CourseDetailPage({
   function openLesson(lesson: CourseLesson) {
     const lessonUrl = `/academy/learn/${course.id}?lesson=${encodeURIComponent(lesson.id)}`;
 
-    if (lesson.previewEnabled && !session) {
-      setPreviewLessonId(lesson.id);
-      return;
-    }
-
     if (lesson.previewEnabled) {
-      window.location.assign(lessonUrl);
+      setPreviewLessonId(lesson.id);
       return;
     }
 
@@ -832,13 +827,19 @@ export function CourseDetailPage({
 
               <div className="mt-5 flex flex-col gap-3 rounded-xl bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-semibold leading-6 text-white/75">
-                  Sign in to continue the course, save progress, and unlock your certificate.
+                  {session
+                    ? 'Open this lesson in the course player to continue, save your progress and earn your certificate.'
+                    : 'Sign in to continue the course, save progress, and unlock your certificate.'}
                 </p>
                 <Link
-                  href={previewLoginHref}
+                  href={
+                    session
+                      ? `/academy/learn/${course.id}?lesson=${activePreviewLesson.id}`
+                      : previewLoginHref
+                  }
                   className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-[#7c3aed] px-4 text-sm font-black text-white transition hover:bg-[#6d31dc]"
                 >
-                  Sign in
+                  {session ? 'Open lesson' : 'Sign in'}
                 </Link>
               </div>
             </div>
