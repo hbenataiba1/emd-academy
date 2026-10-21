@@ -1,3 +1,4 @@
+import { formatMinutes } from '@/lib/format-duration';
 import {
   mapSupabaseCourse,
   type AcademyCourse,
@@ -46,7 +47,7 @@ export async function getPublishedCoursesFromSupabase(): Promise<
     // This is read from the lessons themselves, so it can never drift.
     try {
       const lessonsEndpoint = new URL('/rest/v1/lessons', supabaseUrl);
-      lessonsEndpoint.searchParams.set('select', 'course_id,lesson_type');
+      lessonsEndpoint.searchParams.set('select', 'course_id,lesson_type,duration_minutes');
       // Lessons are not public, so this server-side read uses the service key.
       const lessonsKey = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY) || supabaseKey;
       const lessonsResponse = await fetch(lessonsEndpoint, {
@@ -61,16 +62,25 @@ export async function getPublishedCoursesFromSupabase(): Promise<
         const lessons = (await lessonsResponse.json()) as {
           course_id: string;
           lesson_type?: string;
+          duration_minutes?: number | null;
         }[];
         const counts = new Map<string, number>();
+        const minutes = new Map<string, number>();
         lessons.forEach((lesson) => {
           if (lesson.lesson_type !== 'quiz') {
             counts.set(lesson.course_id, (counts.get(lesson.course_id) || 0) + 1);
+            minutes.set(
+              lesson.course_id,
+              (minutes.get(lesson.course_id) || 0) + (lesson.duration_minutes || 0),
+            );
           }
         });
 
         courses.forEach((course) => {
           if (counts.has(course.id)) course.lessons = counts.get(course.id)!;
+          // The real length of the lessons (the exam is not counted); empty when the
+          // lesson lengths have not been filled in, so no made-up number is shown.
+          if (minutes.has(course.id)) course.duration = formatMinutes(minutes.get(course.id)!);
         });
       }
     } catch {

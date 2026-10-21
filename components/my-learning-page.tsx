@@ -27,6 +27,7 @@ import {
   getStoredAcademySession,
   type AcademySession,
 } from '@/lib/academy-session';
+import { formatMinutes } from '@/lib/format-duration';
 import { getStoredLearningCourses } from '@/lib/academy-learning-state';
 import {
   downloadCertificatePdf,
@@ -43,6 +44,8 @@ type LearningCourse = {
   completedLessons: number;
   /** All lessons are done and only the final exam is left. */
   examPending?: boolean;
+  /** Total length, in minutes, of the lessons the learner has completed. */
+  minutesLearned?: number;
   progress: number;
   lastLesson?: string;
   image: string;
@@ -450,11 +453,11 @@ export default function MyLearningPage() {
   const completed = courses.filter((course) => course.progress === 100);
   const notStarted = courses.filter((course) => course.progress === 0);
   const hoursLearned = useMemo(() => {
-    const lessonCount = courses.reduce(
-      (total, course) => total + course.completedLessons,
+    const minutes = courses.reduce(
+      (total, course) => total + (course.minutesLearned || 0),
       0,
     );
-    return `${Math.round(lessonCount * 0.18 * 10) / 10}h`;
+    return formatMinutes(minutes) || '0 min';
   }, [courses]);
   const displayName =
     payload?.user?.name || getAcademyDisplayName(session || null);

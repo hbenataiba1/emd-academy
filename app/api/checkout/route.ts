@@ -148,6 +148,10 @@ export async function POST(request: Request) {
   const origin = siteUrl || new URL(request.url).origin;
   const params = new URLSearchParams();
   params.set('mode', 'payment');
+  // Stripe's Managed Payments (Stripe as the seller of record) is on by default in
+  // the account and needs product tax codes. The academy sells as itself, so it is
+  // switched off for these sessions.
+  params.set('managed_payments[enabled]', 'false');
 
   // The price is created on the fly from the price set in the CRM. No Stripe price
   // id or product has to be created or configured anywhere.

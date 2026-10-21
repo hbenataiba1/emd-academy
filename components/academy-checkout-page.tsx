@@ -77,6 +77,23 @@ export function AcademyCheckoutPage({ course }: { course: CheckoutCourse }) {
 
     for (let attempt = 0; attempt < 15; attempt += 1) {
       try {
+        // Ask the server to check the payment with Stripe and unlock the course now;
+        // this does not depend on Stripe's webhook having arrived yet.
+        const confirm = await fetch('/api/academy/checkout/confirm', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...getAcademyAuthHeader(session),
+          },
+          body: JSON.stringify({ courseId: course.id }),
+        });
+        const confirmed = (await confirm.json().catch(() => ({}))) as { enrolled?: boolean };
+
+        if (confirmed.enrolled) {
+          setPhase('done');
+          return;
+        }
+
         const response = await fetch('/api/academy/enroll', {
           method: 'POST',
           headers: {

@@ -90,6 +90,9 @@ export async function GET(request: Request) {
       const completedContent = contentLessons.filter((lesson) =>
         completedIds.has(lesson.id),
       ).length;
+      const minutesLearned = contentLessons
+        .filter((lesson) => completedIds.has(lesson.id))
+        .reduce((sum, lesson) => sum + (lesson.minutes || 0), 0);
       const examPassed = exam ? completedIds.has(exam.id) : true;
       const completedAll = completedContent + (exam && examPassed ? 1 : 0);
       const totalAll = Math.max(allLessons.length, 1);
@@ -119,6 +122,7 @@ export async function GET(request: Request) {
         accent: course.accent,
         status: enrollment.status,
         certificate,
+        minutesLearned,
         examPending: Boolean(exam) && !examPassed && completedContent >= contentLessons.length,
       };
     }));

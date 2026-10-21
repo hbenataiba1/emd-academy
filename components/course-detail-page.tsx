@@ -23,6 +23,7 @@ import {
 import { AcademyFooter, AcademyHeader } from '@/components/academy-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { getVideoEmbedUrl, isVideoEmbedUrl } from '@/lib/video-embed';
 import type { AcademyCourse } from '@/lib/academy-data';
 import type { CourseCurriculum, CourseLesson } from '@/lib/curriculum-data';
 import {
@@ -122,36 +123,9 @@ function getLessonSummary(lesson: CourseLesson): string {
   );
 }
 
-function getPreviewEmbedUrl(url?: string): string {
-  if (!url) return '';
-  if (url.includes('youtube.com/watch?v=')) {
-    return url.replace('youtube.com/watch?v=', 'youtube.com/embed/');
-  }
-  if (url.includes('youtu.be/')) {
-    const id = url.split('youtu.be/')[1]?.split(/[?#]/)[0];
-    return `https://www.youtube.com/embed/${id}`;
-  }
-  if (url.includes('vimeo.com/') && !url.includes('player.vimeo.com')) {
-    const id = url.split('vimeo.com/')[1]?.split(/[?#]/)[0];
-    return `https://player.vimeo.com/video/${id}`;
-  }
-  if (url.includes('loom.com/share/')) {
-    const id = url.split('loom.com/share/')[1]?.split(/[?#]/)[0];
-    return `https://www.loom.com/embed/${id}`;
-  }
-  return url;
-}
-
-function isPreviewEmbedUrl(url?: string): boolean {
-  if (!url) return false;
-  const lower = url.toLowerCase();
-  return (
-    lower.includes('youtube.com') ||
-    lower.includes('youtu.be') ||
-    lower.includes('vimeo.com') ||
-    lower.includes('loom.com')
-  );
-}
+// Video links from YouTube, Vimeo, Loom and Bunny play inside the popup.
+const getPreviewEmbedUrl = getVideoEmbedUrl;
+const isPreviewEmbedUrl = isVideoEmbedUrl;
 
 function isDirectVideoUrl(url?: string): boolean {
   if (!url) return false;
@@ -304,48 +278,74 @@ export function CourseDetailPage({
     };
   }, [activePreviewLesson]);
 
-  function loginForCourse() {
-    window.location.assign(
-      `/academy/login?next=${encodeURIComponent(`/academy/learn/${course.id}`)}`,
-    );
+  const checkoutUrl = `/academy/checkout/${encodeURIComponent(course.slug || course.id)}`;
+
+  // After logging in, a paid course continues to checkout (which skips straight to
+  // the player when the course is already paid for); a free course to the player.
+  function loginForCourse(lessonId?: string) {
+    const next = freeCourse
+      ? `/academy/learn/${course.id}${lessonId ? `?lesson=${encodeURIComponent(lessonId)}` : ''}`
+      : checkoutUrl;
+
+    window.location.assign(`/academy/login?next=${encodeURIComponent(next)}`);
+  }
+
+  // Whether the learner already has access (paid, or enrolled in a free course).
+  async function hasAccess() {
+    try {
+      const response = await fetch('/api/academy/enroll', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...getAcademyAuthHeader(session),
+        },
+        body: JSON.stringify({ courseId: course.id }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { enrolled?: boolean };
+
+      return Boolean(response.ok && payload.enrolled);
+    } catch {
+      return false;
+    }
+  }
+
+  // Free course or already paid: the player. Paid and not yet bought: checkout.
+  async function goToCourse(lessonId?: string) {
+    if (!session) {
+      loginForCourse(lessonId);
+      return;
+    }
+
+    const learnUrl = `/academy/learn/${course.id}${lessonId ? `?lesson=${encodeURIComponent(lessonId)}` : ''}`;
+
+    if (freeCourse || (await hasAccess())) {
+      markCourseStarted(course);
+      window.location.assign(learnUrl);
+      return;
+    }
+
+    window.location.assign(checkoutUrl);
   }
 
   async function openCourse() {
-    if (!session) {
-      loginForCourse();
-      return;
-    }
-
-    if (freeCourse) {
-      markCourseStarted(course);
-      window.location.assign(`/academy/learn/${course.id}`);
-      return;
-    }
-
-    markCourseStarted(course);
-    window.location.assign(`/academy/learn/${course.id}`);
+    await goToCourse();
   }
 
   function openLesson(lesson: CourseLesson) {
-    const lessonUrl = `/academy/learn/${course.id}?lesson=${encodeURIComponent(lesson.id)}`;
-
     if (lesson.previewEnabled) {
       setPreviewLessonId(lesson.id);
       return;
     }
 
-    if (!session) {
-      loginForCourse();
-      return;
-    }
-
-    window.location.assign(lessonUrl);
+    void goToCourse(lesson.id);
   }
 
   const previewLoginHref = `/academy/login?next=${encodeURIComponent(
-    activePreviewLesson
-      ? `/academy/learn/${course.id}?lesson=${activePreviewLesson.id}`
-      : `/academy/learn/${course.id}`,
+    freeCourse
+      ? activePreviewLesson
+        ? `/academy/learn/${course.id}?lesson=${activePreviewLesson.id}`
+        : `/academy/learn/${course.id}`
+      : checkoutUrl,
   )}`;
 
   return (
@@ -393,10 +393,12 @@ export function CourseDetailPage({
                   {numberFormatter.format(course.students)} learners
                 </span>
               ) : null}
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="size-4 text-[#7c3aed]" />
-                {course.duration}
-              </span>
+              {course.duration ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="size-4 text-[#7c3aed]" />
+                  {course.duration}
+                </span>
+              ) : null}
               <span className="inline-flex items-center gap-1.5">
                 <BookOpen className="size-4 text-[#08a99f]" />
                 {totalLessons || course.lessons} lessons
@@ -413,12 +415,12 @@ export function CourseDetailPage({
                   ? 'Continue course'
                   : freeCourse
                     ? 'Start free course'
-                    : 'Go to course access'}
+                    : 'Enroll now'}
                 <ArrowRight className="size-4" />
               </Button>
               {!session ? (
                 <Link
-                  href={`/academy/login?next=${encodeURIComponent(`/academy/learn/${course.id}`)}`}
+                  href={`/academy/login?next=${encodeURIComponent(freeCourse ? `/academy/learn/${course.id}` : checkoutUrl)}`}
                   className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-[#cfc4ee] bg-white px-6 text-sm font-bold text-[#302945] transition hover:bg-[#f4f1ff]"
                 >
                   <LockKeyhole className="size-4 text-[#7c3aed]" />
@@ -434,7 +436,7 @@ export function CourseDetailPage({
               <img
                 src={course.image}
                 alt={course.title}
-                className="aspect-[16/10] w-full object-cover"
+                className="block h-auto w-full"
               />
             </div>
             <div className="mt-5 flex items-end justify-between gap-4">
@@ -587,7 +589,7 @@ export function CourseDetailPage({
             onClick={openCourse}
             className="mt-5 h-11 w-full rounded-lg bg-[#7c3aed] text-sm font-bold text-white hover:bg-[#6d31dc]"
           >
-            {courseStarted ? 'Continue course' : freeCourse ? 'Start free course' : 'Continue'}
+            {courseStarted ? 'Continue course' : freeCourse ? 'Start free course' : 'Enroll now'}
             <ArrowRight className="size-4" />
           </Button>
           <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4">
@@ -828,19 +830,27 @@ export function CourseDetailPage({
               <div className="mt-5 flex flex-col gap-3 rounded-xl bg-white/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-semibold leading-6 text-white/75">
                   {session
-                    ? 'Open this lesson in the course player to continue, save your progress and earn your certificate.'
+                    ? freeCourse
+                      ? 'Open this lesson in the course player to continue, save your progress and earn your certificate.'
+                      : 'Enroll to unlock every lesson, save your progress and earn your certificate.'
                     : 'Sign in to continue the course, save progress, and unlock your certificate.'}
                 </p>
-                <Link
-                  href={
-                    session
-                      ? `/academy/learn/${course.id}?lesson=${activePreviewLesson.id}`
-                      : previewLoginHref
-                  }
-                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-[#7c3aed] px-4 text-sm font-black text-white transition hover:bg-[#6d31dc]"
-                >
-                  {session ? 'Open lesson' : 'Sign in'}
-                </Link>
+                {session ? (
+                  <button
+                    type="button"
+                    onClick={() => void goToCourse(activePreviewLesson.id)}
+                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-[#7c3aed] px-4 text-sm font-black text-white transition hover:bg-[#6d31dc]"
+                  >
+                    {freeCourse ? 'Open lesson' : 'Enroll to continue'}
+                  </button>
+                ) : (
+                  <Link
+                    href={previewLoginHref}
+                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-[#7c3aed] px-4 text-sm font-black text-white transition hover:bg-[#6d31dc]"
+                  >
+                    Sign in
+                  </Link>
+                )}
               </div>
             </div>
           </div>

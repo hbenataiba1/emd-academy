@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { formatMinutes } from '@/lib/format-duration';
 import { academyRestFetch } from '@/lib/academy-auth';
 import { getCurriculumForCourse, type CourseCurriculum, type CourseSection, type CourseLesson } from '@/lib/curriculum-data';
 
@@ -70,8 +71,10 @@ export async function GET(request: Request) {
           lessons,
         }));
 
-        const totalMinutes = dbLessons.reduce((sum, l) => sum + (l.duration_minutes || 0), 0);
-        const hours = (totalMinutes / 60).toFixed(1);
+        // The final exam is not part of the learning time.
+        const totalMinutes = dbLessons
+          .filter((l) => l.lesson_type !== 'quiz')
+          .reduce((sum, l) => sum + (l.duration_minutes || 0), 0);
 
         const curriculum: CourseCurriculum = {
           courseId: resolvedId,
@@ -82,7 +85,7 @@ export async function GET(request: Request) {
           ratingCount: 0,
           studentCount: courseData?.learner_count || 0,
           lastUpdated: '2026',
-          totalDuration: `${hours} hours`,
+          totalDuration: formatMinutes(totalMinutes) || '—',
           sections,
         };
 

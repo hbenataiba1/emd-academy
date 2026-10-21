@@ -56,6 +56,7 @@ import {
 } from '@/lib/curriculum-data';
 import { useCertificatePreviewUrl } from '@/lib/use-certificate-preview';
 import { ArticleBody } from '@/components/article-body';
+import { getVideoEmbedUrl, isVideoEmbedUrl } from '@/lib/video-embed';
 import { ExamCelebration } from '@/components/exam-celebration';
 import { LessonPromoCard } from '@/components/lesson-promo-card';
 import { LessonResourceCard } from '@/components/lesson-resource-card';
@@ -199,27 +200,9 @@ function formatQuizTime(totalSeconds: number) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-function getEmbedUrl(url?: string): string {
-  if (!url) return '';
-  if (url.includes('youtube.com/watch?v=')) {
-    return url.replace('youtube.com/watch?v=', 'youtube.com/embed/');
-  }
-  if (url.includes('youtu.be/')) {
-    const id = url.split('youtu.be/')[1]?.split(/[?#]/)[0];
-    return `https://www.youtube.com/embed/${id}`;
-  }
-  if (url.includes('vimeo.com/') && !url.includes('player.vimeo.com')) {
-    const id = url.split('vimeo.com/')[1]?.split(/[?#]/)[0];
-    return `https://player.vimeo.com/video/${id}`;
-  }
-  return url;
-}
-
-function isEmbedUrl(url?: string): boolean {
-  if (!url) return false;
-  const lower = url.toLowerCase();
-  return lower.includes('youtube.com') || lower.includes('youtu.be') || lower.includes('vimeo.com');
-}
+// Video links from YouTube, Vimeo, Loom and Bunny play inside the page.
+const getEmbedUrl = getVideoEmbedUrl;
+const isEmbedUrl = isVideoEmbedUrl;
 
 export function CoursePlayer({
   courseId = 'eu-mdr-technical-file',
@@ -1726,8 +1709,9 @@ export function CoursePlayer({
                 isEmbedUrl(activeLesson.videoUrl) ? (
                   <iframe
                     src={getEmbedUrl(activeLesson.videoUrl)}
+                    title={activeLesson.title}
                     className="h-full w-full border-0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture"
                     allowFullScreen
                   />
                 ) : (

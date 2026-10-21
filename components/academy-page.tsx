@@ -1002,7 +1002,7 @@ function CourseCard({
   const enrolled = Boolean(learnerState?.enrolled);
   return (
     <Card
-      className="rounded-lg border-[#e4ddf4] bg-white py-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgb(38_29_68/10%)]"
+      className="h-full rounded-lg border-[#e4ddf4] bg-white py-0 shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgb(38_29_68/10%)]"
       style={{ '--course-accent': course.accent } as CSSProperties}
     >
       <Link
@@ -1050,21 +1050,23 @@ function CourseCard({
           ) : null}
         </div>
         <Link href={`/academy/course/${course.slug || course.id}`}>
-          <CardTitle className="text-xl font-bold leading-snug text-[#191625] transition hover:text-[#7c3aed]">
+          <CardTitle className="line-clamp-3 min-h-[56px] text-xl font-bold leading-snug text-[#191625] transition hover:text-[#7c3aed]">
             {course.title}
           </CardTitle>
         </Link>
       </CardHeader>
 
-      <CardContent className="px-5 pb-5">
-        <p className="min-h-[72px] text-sm leading-6 text-[#625b75]">
+      <CardContent className="flex-1 px-5 pb-5">
+        <p className="line-clamp-3 min-h-[72px] text-sm leading-6 text-[#625b75]">
           {course.subtitle}
         </p>
         <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-semibold text-[#625b75]">
-          <span className="flex items-center gap-1 rounded-lg bg-[#f6f4fb] px-2 py-2">
-            <Clock className="size-3.5 text-[#7c3aed]" />
-            {course.duration}
-          </span>
+          {course.duration ? (
+            <span className="flex items-center gap-1 rounded-lg bg-[#f6f4fb] px-2 py-2">
+              <Clock className="size-3.5 text-[#7c3aed]" />
+              {course.duration}
+            </span>
+          ) : null}
           <span className="flex items-center gap-1 rounded-lg bg-[#f6f4fb] px-2 py-2">
             <BookOpen className="size-3.5 text-[#08a99f]" />
             {course.lessons} lessons
