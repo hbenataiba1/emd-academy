@@ -910,11 +910,16 @@ export function AcademyPage({
           <div className="mt-8 rounded-xl border border-dashed border-[#cfc4ee] bg-white/70 p-4 text-center">
             <p className="text-xs font-medium text-[#5f5872] sm:text-sm">
               ✨ Have you completed a course? Post your certificate on LinkedIn
-              with{' '}
-              <span className="font-semibold text-[#6b34e9]">
-                #EasyMedicalDeviceAcademy
-              </span>{' '}
-              to be featured here!
+              and tag the{' '}
+              <a
+                href="https://www.linkedin.com/company/easymedicaldevice/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-[#6b34e9] underline-offset-2 hover:underline"
+              >
+                Easy Medical Device
+              </a>{' '}
+              page to be featured here!
             </p>
           </div>
         </div>
