@@ -8,7 +8,9 @@ export const courseCategories = [
   'Market Access',
 ] as const;
 
-export type CourseCategory = Exclude<(typeof courseCategories)[number], 'All'>;
+// A course category is whatever is typed in the CRM (for example "QMS"), so it is
+// no longer limited to the list above. That list is only the default set of filters.
+export type CourseCategory = string;
 
 export type AcademyCourse = {
   id: string;
@@ -61,8 +63,8 @@ export type SupabaseCourseRow = Partial<{
   stripe_price_env: string;
 }>;
 
-const contentCategories = courseCategories.filter(
-  (category): category is CourseCategory => category !== 'All',
+const contentCategories: string[] = courseCategories.filter(
+  (category) => category !== 'All',
 );
 
 const defaultImages = [
@@ -316,11 +318,15 @@ export function mapSupabaseCourse(
 }
 
 function normalizeCategory(value?: string): CourseCategory {
+  const text = (value || '').trim();
+  if (!text) return 'EU MDR';
+
+  // Known categories keep their usual spelling; anything else is shown as typed.
   const match = contentCategories.find(
-    (category) => category.toLowerCase() === value?.toLowerCase(),
+    (category) => category.toLowerCase() === text.toLowerCase(),
   );
 
-  return match || 'EU MDR';
+  return match || text;
 }
 
 function normalizeOutcomes(

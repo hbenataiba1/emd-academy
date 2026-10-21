@@ -132,8 +132,34 @@ export function AcademyPage({
   communityPosts = [],
 }: AcademyPageProps) {
   const sampleCertificatePreview = useCertificatePreviewUrl(sampleCertificatePayload);
-  const [selectedCategory, setSelectedCategory] =
-    useState<(typeof courseCategories)[number]>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [priceFilter, setPriceFilter] = useState<'all' | 'free' | 'paid'>('all');
+
+  const isFreeCourse = (course: AcademyCourse) =>
+    course.price <= 0 ||
+    course.priceLabel?.trim().toLowerCase() === 'free' ||
+    course.priceLabel?.trim().toLowerCase() === '$0';
+  const priceCounts = useMemo(() => {
+    const free = initialCourses.filter(isFreeCourse).length;
+    return { all: initialCourses.length, free, paid: initialCourses.length - free };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCourses]);
+
+  // Filters follow the categories of the published courses, so a category typed in
+  // the CRM always gets its own filter, and categories nobody uses are not shown.
+  const categoryFilters = useMemo(() => {
+    const used = Array.from(
+      new Set(initialCourses.map((course) => course.category).filter(Boolean)),
+    );
+    const known = courseCategories.filter(
+      (category) => category !== 'All' && used.includes(category),
+    );
+    const custom = used.filter(
+      (category) => !(courseCategories as readonly string[]).includes(category),
+    );
+
+    return ['All', ...known, ...custom];
+  }, [initialCourses]);
   const [search, setSearch] = useState('');
   const [pendingCourse, setPendingCourse] = useState<string | null>(null);
   const postsScrollerRef = useRef<HTMLDivElement | null>(null);
@@ -239,9 +265,14 @@ export function AcademyPage({
           .toLowerCase()
           .includes(query);
 
-      return matchesCategory && matchesQuery;
+      const matchesPrice =
+        priceFilter === 'all' ||
+        (priceFilter === 'free' ? isFreeCourse(course) : !isFreeCourse(course));
+
+      return matchesCategory && matchesQuery && matchesPrice;
     });
-  }, [initialCourses, search, selectedCategory]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCourses, search, selectedCategory, priceFilter]);
 
   async function startCheckout(courseId: string) {
     const course = initialCourses.find((item) => item.id === courseId);
@@ -443,9 +474,10 @@ export function AcademyPage({
           </label>
         </div>
 
-        <div className="mt-6 flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
           <Filter className="size-4 shrink-0 text-[#7c3aed]" />
-          {courseCategories.map((category) => (
+          {categoryFilters.map((category) => (
             <Button
               key={category}
               type="button"
@@ -462,6 +494,36 @@ export function AcademyPage({
               {category}
             </Button>
           ))}
+        </div>
+
+        <div
+          role="group"
+          aria-label="Filter by price"
+          className="inline-flex w-fit shrink-0 rounded-lg border border-[#dcd5ee] bg-white p-1"
+        >
+          {([
+            ['all', 'All prices', priceCounts.all],
+            ['free', 'Free', priceCounts.free],
+            ['paid', 'Paid', priceCounts.paid],
+          ] as const).map(([value, label, count]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setPriceFilter(value)}
+              aria-pressed={priceFilter === value}
+              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${
+                priceFilter === value
+                  ? 'bg-[#7c3aed] text-white shadow-sm'
+                  : 'text-[#514b63] hover:bg-[#f4f1ff]'
+              }`}
+            >
+              {label}
+              <span className={`ml-1.5 text-xs ${priceFilter === value ? 'text-white/80' : 'text-[#8b849a]'}`}>
+                {count}
+              </span>
+            </button>
+          ))}
+        </div>
         </div>
 
         {checkoutNotice ? (

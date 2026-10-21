@@ -57,6 +57,7 @@ import {
 import { useCertificatePreviewUrl } from '@/lib/use-certificate-preview';
 import { ArticleBody } from '@/components/article-body';
 import { getVideoEmbedUrl, isVideoEmbedUrl } from '@/lib/video-embed';
+import { CourseSurvey } from '@/components/course-survey';
 import { ExamCelebration } from '@/components/exam-celebration';
 import { LessonPromoCard } from '@/components/lesson-promo-card';
 import { LessonResourceCard } from '@/components/lesson-resource-card';
@@ -213,6 +214,8 @@ export function CoursePlayer({
   // real lessons before drawing anything, so a sample video lesson never flashes
   // up in front of an article.
   const [curriculumReady, setCurriculumReady] = useState(false);
+  const [surveyOpen, setSurveyOpen] = useState(false);
+  const [surveyPrompted, setSurveyPrompted] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -1349,11 +1352,25 @@ export function CoursePlayer({
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
-                            onClick={downloadCertificate}
+                            onClick={() => {
+                              downloadCertificate();
+                              if (!surveyPrompted) {
+                                setSurveyPrompted(true);
+                                window.setTimeout(() => setSurveyOpen(true), 1500);
+                              }
+                            }}
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#34d4c6] px-4 text-sm font-black text-[#08110f] transition hover:bg-[#5ee7dc]"
                           >
                             <Download className="size-4" />
                             Download PDF
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSurveyOpen(true)}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#f6b44b]/50 bg-[#f6b44b]/10 px-4 text-sm font-black text-[#f6b44b] transition hover:bg-[#f6b44b]/20"
+                          >
+                            <Star className="size-4" />
+                            Rate this course
                           </button>
                           <button
                             type="button"
@@ -1400,6 +1417,27 @@ export function CoursePlayer({
                           )}
                         </div>
                       )}
+
+                      {certificateNumber ? <CourseSurvey courseId={courseId} /> : null}
+
+                      {surveyOpen ? (
+                        <div
+                          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
+                          onClick={() => setSurveyOpen(false)}
+                        >
+                          <div className="relative w-full max-w-lg" onClick={(event) => event.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => setSurveyOpen(false)}
+                              aria-label="Close"
+                              className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white"
+                            >
+                              <X className="size-5" />
+                            </button>
+                            <CourseSurvey courseId={courseId} />
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <>
@@ -2058,6 +2096,8 @@ export function CoursePlayer({
                     <span>Updated {curriculum.lastUpdated}</span>
                   </div>
                 </div>
+
+                {progressPercent === 100 && hasFullAccess ? <CourseSurvey courseId={courseId} /> : null}
 
                 {/* Action quick banner for mark complete (articles use the sticky bar) */}
                 {activeLesson?.type !== 'article' ? (
