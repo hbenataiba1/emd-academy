@@ -15,6 +15,7 @@ import {
   Laptop,
   ListChecks,
   LogOut,
+  Menu,
   Mic,
   Microscope,
   Network,
@@ -24,6 +25,7 @@ import {
   Stethoscope,
   User,
   Users,
+  X,
 } from "lucide-react";
 import {
   clearAcademySession,
@@ -159,6 +161,249 @@ const mainSiteMenu: MainMenuItem[] = [
   { label: "About", href: "https://easymedicaldevice.com/about/", megaMenu: aboutMenuItems, width: "w-[390px]", gridCols: "grid-cols-1" },
 ];
 
+/* ── Mobile menu ────────────────────────────── */
+function MobileMenu({
+  open,
+  onClose,
+  session,
+  displayName,
+  avatarUrl,
+  initials,
+  activePage,
+  onSignOut,
+}: {
+  open: boolean;
+  onClose: () => void;
+  session: AcademySession | null;
+  displayName: string;
+  avatarUrl: string | null;
+  initials: string;
+  activePage: string;
+  onSignOut: () => void;
+}) {
+  const [section, setSection] = useState<string | null>(null);
+  const [openGroups, setOpenGroups] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const rowClass =
+    "flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-semibold text-[#302945] transition hover:bg-[#f4f0ff] active:bg-[#ece5ff]";
+  const activeRowClass = "bg-[#f4f0ff] text-[#7c3aed]";
+  const sectionTitle =
+    "px-3 pb-1 pt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#8b849a]";
+
+  return (
+    <div className="fixed inset-0 z-[100] lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
+      <button
+        type="button"
+        aria-label="Close menu"
+        onClick={onClose}
+        className="absolute inset-0 animate-in bg-[#12101c]/55 backdrop-blur-sm duration-200 fade-in"
+      />
+
+      <div className="absolute right-0 top-0 flex h-full w-[90%] max-w-sm animate-in flex-col bg-white shadow-2xl duration-300 slide-in-from-right">
+        {/* Top bar */}
+        <div className="flex items-center justify-between border-b border-[#ede8fb] px-4 py-3">
+          <div className="leading-none">
+            <span className="block text-[11px] font-semibold text-[#6e687e]">Easy Medical Device</span>
+            <span className="mt-1 block text-xl font-black tracking-tight text-[#7c3aed]">Academy</span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close menu"
+            className="flex size-10 items-center justify-center rounded-full text-[#302945] transition hover:bg-[#f4f0ff]"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-3 pb-6">
+          {/* Account */}
+          {session ? (
+            <div className="mt-4 rounded-2xl bg-[#f8f6ff] p-3">
+              <div className="flex items-center gap-3 px-1 pb-2">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={displayName} className="size-11 rounded-full object-cover ring-2 ring-[#7c3aed]/30" />
+                ) : (
+                  <div className="flex size-11 items-center justify-center rounded-full bg-[#7c3aed] text-sm font-bold text-white">
+                    {initials}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-[#171321]">{displayName}</p>
+                  <p className="truncate text-xs text-[#6e687d]">{session.user.email}</p>
+                </div>
+              </div>
+              <Link href="/academy/my-learning" onClick={onClose} className={`${rowClass} ${activePage === "my-learning" ? activeRowClass : ""}`}>
+                <GraduationCap className="size-5 text-[#7c3aed]" /> My Learning
+              </Link>
+              <Link href="/academy/billing" onClick={onClose} className={`${rowClass} ${activePage === "billing" ? activeRowClass : ""}`}>
+                <Receipt className="size-5 text-[#7c3aed]" /> Billing &amp; invoices
+              </Link>
+              <Link href="/academy/profile" onClick={onClose} className={`${rowClass} ${activePage === "profile" ? activeRowClass : ""}`}>
+                <User className="size-5 text-[#7c3aed]" /> My Profile
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-2.5">
+              <Link
+                href="/academy/login"
+                onClick={onClose}
+                className="inline-flex h-12 items-center justify-center rounded-xl border border-[#cfc4ee] text-sm font-bold text-[#302945] transition hover:bg-[#f4f0ff]"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/academy/signup?next=/academy/my-learning"
+                onClick={onClose}
+                className="inline-flex h-12 items-center justify-center rounded-xl bg-[#7c3aed] text-sm font-bold text-white transition hover:bg-[#6d31dc]"
+              >
+                Sign up
+              </Link>
+            </div>
+          )}
+
+          {/* Academy */}
+          <p className={sectionTitle}>Academy</p>
+          {[
+            { label: "Courses", href: "/academy#courses", icon: BookOpen },
+            { label: "Certificate", href: "/academy#certificate", icon: ShieldCheck },
+            { label: "Instructor", href: "/academy#instructor", icon: Users },
+            { label: "Community", href: "/academy#community", icon: Network },
+          ].map(({ label, href, icon: Icon }) => (
+            <Link key={label} href={href} onClick={onClose} className={rowClass}>
+              <Icon className="size-5 text-[#7c3aed]" /> {label}
+            </Link>
+          ))}
+
+          {/* Main site */}
+          <p className={sectionTitle}>Easy Medical Device</p>
+          {mainSiteMenu.map((item) => {
+            const expandable = Boolean(item.megaMenu || item.serviceColumns);
+            const isOpen = section === item.label;
+
+            if (!expandable) {
+              return (
+                <a key={item.label} href={item.href} className={rowClass}>
+                  {item.label}
+                </a>
+              );
+            }
+
+            return (
+              <div key={item.label}>
+                <button
+                  type="button"
+                  onClick={() => setSection((prev) => (prev === item.label ? null : item.label))}
+                  aria-expanded={isOpen}
+                  className={`${rowClass} w-full justify-between ${isOpen ? activeRowClass : ""}`}
+                >
+                  <span>{item.label}</span>
+                  <ChevronDown className={`size-4 transition-transform ${isOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+                </button>
+
+                {isOpen && item.serviceColumns ? (
+                  <div className="mb-2 space-y-1 border-l-2 border-[#ede8fb] pl-3 ml-4">
+                    {item.serviceColumns.flat().map((group) => {
+                      const GroupIcon = group.icon;
+                      const groupOpen = openGroups.includes(group.title);
+                      return (
+                        <div key={group.title}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenGroups((prev) =>
+                                prev.includes(group.title) ? prev.filter((t) => t !== group.title) : [...prev, group.title],
+                              )
+                            }
+                            aria-expanded={groupOpen}
+                            className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2.5 text-left text-sm font-bold text-[#191625] hover:bg-[#f8f6ff]"
+                          >
+                            <span className="flex items-center gap-2.5">
+                              <GroupIcon className="size-4 text-[#7c3aed]" /> {group.title}
+                            </span>
+                            <ChevronDown className={`size-4 transition-transform ${groupOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+                          </button>
+                          {groupOpen ? (
+                            <ul className="mb-1 space-y-0.5 pl-9">
+                              {group.links.map((link) => (
+                                <li key={link.href}>
+                                  <a href={link.href} className="block rounded-md py-1.5 text-sm text-[#3b3650] underline-offset-2 hover:text-[#7c3aed] hover:underline">
+                                    {link.label}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {isOpen && item.megaMenu ? (
+                  <div className="mb-2 ml-4 space-y-0.5 border-l-2 border-[#ede8fb] pl-3">
+                    {item.megaMenu.map((sub) => {
+                      const SubIcon = sub.icon;
+                      return (
+                        <a
+                          key={sub.title}
+                          href={sub.href}
+                          {...(sub.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                          onClick={sub.href.startsWith("/") ? onClose : undefined}
+                          className="flex items-center gap-2.5 rounded-lg px-2 py-2.5 text-sm font-semibold text-[#302945] hover:bg-[#f8f6ff]"
+                        >
+                          <SubIcon className="size-4 shrink-0 text-[#7c3aed]" /> {sub.title}
+                        </a>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Bottom actions */}
+        <div className="space-y-2 border-t border-[#ede8fb] p-3">
+          <a
+            href="https://easymedicaldevice.com/contact/"
+            className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#eee8fb] text-sm font-bold text-[#6b34e9] transition hover:bg-[#e6dcfb]"
+          >
+            Let&apos;s Talk
+          </a>
+          {session ? (
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-[#b42318] transition hover:bg-[#fff5f5]"
+            >
+              <LogOut className="size-4" /> Sign out
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── AcademyHeader ──────────────────────────── */
 export function AcademyHeader({
   activePage = "home",
@@ -166,7 +411,7 @@ export function AcademyHeader({
   activePage?: "home" | "my-learning" | "auth" | "profile" | "billing";
 } = {}) {
   const [activeMegaMenu, setActiveMegaMenu] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [session, setSession] = useState<AcademySession | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [openServiceGroups, setOpenServiceGroups] = useState<string[]>([]);
@@ -229,9 +474,9 @@ export function AcademyHeader({
   return (
     <>
       <header className="relative z-50 border-b border-[#ded6f3]/60 bg-[#f8f6ff]">
-      <div className="mx-auto grid min-h-[92px] max-w-[1380px] grid-cols-[1fr_auto] items-center gap-4 px-4 sm:px-6 lg:min-h-[112px] lg:grid-cols-[150px_1fr_260px] lg:px-8">
+      <div className="mx-auto grid min-h-[68px] max-w-[1380px] grid-cols-[1fr_auto] items-center gap-4 px-4 sm:px-6 lg:min-h-[112px] lg:grid-cols-[150px_1fr_260px] lg:px-8">
         <a href="https://easymedicaldevice.com/" aria-label="Easy Medical Device home" className="flex w-fit items-center">
-          <img src="/academy/easy-medical-device-logo.png" alt="Easy Medical Device" className="size-[76px] object-contain lg:size-[92px]" />
+          <img src="/academy/easy-medical-device-logo.png" alt="Easy Medical Device" className="size-[52px] object-contain sm:size-[60px] lg:size-[92px]" />
         </a>
 
         {/* Desktop nav */}
@@ -335,83 +580,10 @@ export function AcademyHeader({
           ))}
         </nav>
 
-        <a href="https://easymedicaldevice.com/contact/" className="inline-flex h-[52px] min-w-[148px] items-center justify-center rounded-lg bg-[#eee8fb] px-6 text-base font-medium text-[#6b34e9] transition hover:bg-[#e6dcfb] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#6b34e9]/20 sm:min-w-[190px] lg:h-[54px] lg:min-w-[260px]">
+        <a href="https://easymedicaldevice.com/contact/" className="inline-flex h-10 min-w-[116px] items-center justify-center rounded-lg bg-[#eee8fb] px-5 text-sm font-semibold sm:h-[52px] sm:min-w-[148px] sm:text-base sm:font-medium text-[#6b34e9] transition hover:bg-[#e6dcfb] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#6b34e9]/20 sm:min-w-[190px] lg:h-[54px] lg:min-w-[260px]">
           Let&apos;s Talk
         </a>
 
-        {/* Mobile accordion */}
-        <div className="col-span-2 flex flex-col gap-2 pb-3 lg:hidden">
-          <nav aria-label="Easy Medical Device mobile main menu" className="flex items-center gap-3 overflow-x-auto text-sm font-medium text-black">
-            {mainSiteMenu.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => setMobileMenuOpen((prev) => prev === item.label ? null : item.label)}
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-semibold transition ${mobileMenuOpen === item.label ? "bg-[#7c3aed] text-white" : "bg-white text-[#201b31] border border-[#ded6f3]"}`}
-              >
-                <span>{item.label}</span>
-                {(item.megaMenu || item.serviceColumns) && (
-                  <ChevronDown className={`size-3.5 transition-transform ${mobileMenuOpen === item.label ? "rotate-180" : ""}`} aria-hidden="true" />
-                )}
-              </button>
-            ))}
-          </nav>
-          {mobileMenuOpen === "Services" && (
-            <div className="mt-2 max-h-[70vh] space-y-5 overflow-y-auto rounded-2xl border border-[#ded6f3] bg-white p-4 shadow-lg">
-              {servicesMenuColumns.flat().map((group) => {
-                const GroupIcon = group.icon;
-                return (
-                  <div key={group.title}>
-                    <button
-                      type="button"
-                      onClick={() => toggleServiceGroup(group.title)}
-                      aria-expanded={openServiceGroups.includes(group.title)}
-                      className="flex w-full items-center justify-between gap-2.5 text-left text-sm font-bold text-[#191625]"
-                    >
-                      <span className="flex items-center gap-2.5">
-                        <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-[#191625]">
-                          <GroupIcon className="size-4" />
-                        </span>
-                        {group.title}
-                      </span>
-                      <ChevronDown
-                        className={`size-4 shrink-0 transition-transform ${openServiceGroups.includes(group.title) ? "rotate-180" : ""}`}
-                        aria-hidden="true"
-                      />
-                    </button>
-                    {openServiceGroups.includes(group.title) ? (
-                      <ul className="mt-2 list-[circle] space-y-1 pl-12 text-sm text-[#3b3650]">
-                        {group.links.map((link) => (
-                          <li key={link.href}>
-                            <a href={link.href} className="underline underline-offset-2">{link.label}</a>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {mobileMenuOpen && mobileMenuOpen !== "Services" && (
-            <div className="mt-2 rounded-2xl border border-[#ded6f3] bg-white p-4 shadow-lg">
-              {mainSiteMenu.find((m) => m.label === mobileMenuOpen)?.megaMenu?.map((subItem) => {
-                const Icon = subItem.icon;
-                return (
-                  <a key={subItem.title} href={subItem.href} {...(subItem.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})} className="flex items-start gap-3 rounded-xl p-2.5 transition hover:bg-[#f8f6ff]">
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[#191625] text-[#191625]">
-                      <Icon className="size-4" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-[#191625]">{subItem.title}</p>
-                      <p className="text-xs text-[#625b75]">{subItem.description}</p>
-                    </div>
-                  </a>
-                );
-              })}
-            </div>
-          )}
-        </div>
         </div>
       </header>
 
@@ -449,7 +621,7 @@ export function AcademyHeader({
               </Link>
 
               {/* Profile Avatar Dropdown */}
-              <div className="relative" ref={profileRef}>
+              <div className="relative hidden lg:block" ref={profileRef}>
                 <button
                   type="button"
                   onClick={() => setProfileOpen((prev) => !prev)}
@@ -597,9 +769,30 @@ export function AcademyHeader({
               )}
             </>
           )}
+
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
+            aria-expanded={drawerOpen}
+            className="flex size-10 items-center justify-center rounded-xl border border-[#ded6f3] bg-white text-[#302945] transition hover:bg-[#f4f0ff] lg:hidden"
+          >
+            <Menu className="size-5" />
+          </button>
         </div>
       </div>
     </section>
+
+    <MobileMenu
+      open={drawerOpen}
+      onClose={() => setDrawerOpen(false)}
+      session={session}
+      displayName={displayName}
+      avatarUrl={avatarUrl}
+      initials={initials}
+      activePage={activePage}
+      onSignOut={handleSignOut}
+    />
   </>
   );
 }
