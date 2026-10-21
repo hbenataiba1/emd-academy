@@ -41,6 +41,8 @@ type LearningCourse = {
   category: string;
   lessons: number;
   completedLessons: number;
+  /** All lessons are done and only the final exam is left. */
+  examPending?: boolean;
   progress: number;
   lastLesson?: string;
   image: string;
@@ -272,6 +274,7 @@ function CourseCard({
           <div className="mb-1 flex justify-between text-[11px] font-medium text-[#7b748c]">
             <span>
               {course.completedLessons}/{course.lessons} lessons
+              {course.examPending ? ' · exam pending' : ''}
             </span>
             <span style={{ color: course.accent }}>{course.progress}%</span>
           </div>

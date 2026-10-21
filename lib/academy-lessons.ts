@@ -4,6 +4,8 @@ import { getCurriculumForCourse } from '@/lib/curriculum-data';
 export type CourseLessonRef = {
   id: string;
   title: string;
+  /** 'quiz' marks the final exam, which is not counted as a lesson. */
+  type?: string;
 };
 
 // The course player shows the lessons stored in the database (falling back to the
@@ -13,16 +15,21 @@ export async function getLessonsForCourse(
 ): Promise<CourseLessonRef[]> {
   try {
     const response = await academyRestFetch(
-      `lessons?select=id,title&course_id=eq.${encodeURIComponent(courseId)}&order=sort_order.asc`,
+      `lessons?select=id,title,lesson_type&course_id=eq.${encodeURIComponent(courseId)}&order=sort_order.asc`,
       { useServiceRole: true },
     );
 
     if (response.ok) {
-      const rows = (await response.json()) as { id: unknown; title?: string }[];
+      const rows = (await response.json()) as {
+        id: unknown;
+        title?: string;
+        lesson_type?: string;
+      }[];
       if (rows.length > 0) {
         return rows.map((row) => ({
           id: String(row.id),
           title: row.title || 'Untitled Lesson',
+          type: row.lesson_type,
         }));
       }
     }

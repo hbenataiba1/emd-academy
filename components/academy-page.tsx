@@ -183,8 +183,9 @@ export function AcademyPage({
       return states;
     };
 
-    setLearnerStates(buildLocalStates());
-
+    // The server is the truth. What this browser remembers is only a fallback for
+    // when the server cannot be reached, so a reset or a change made on another
+    // device is never overridden by old local progress.
     fetch('/api/academy/me', { headers: getAcademyAuthHeader(session) })
       .then(
         (response) => (response.ok ? response.json() : null) as Promise<MePayload | null>,
@@ -198,19 +199,27 @@ export function AcademyPage({
             certificate?: { certificate_number: string };
           }[];
         } | null) => {
-          if (cancelled || !payload?.courses) return;
-          const states = buildLocalStates();
+          if (cancelled) return;
+
+          if (!payload?.courses) {
+            setLearnerStates(buildLocalStates());
+            return;
+          }
+
+          const states: Record<string, CourseLearnerState> = {};
           payload.courses.forEach((course) => {
-            merge(states, course.id, {
+            states[course.id] = {
               enrolled: ['active', 'completed'].includes(course.status || ''),
               progress: course.progress,
               certificateNumber: course.certificate?.certificate_number,
-            });
+            };
           });
           setLearnerStates(states);
         },
       )
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setLearnerStates(buildLocalStates());
+      });
 
     return () => {
       cancelled = true;

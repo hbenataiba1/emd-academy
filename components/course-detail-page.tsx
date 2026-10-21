@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import type { AcademyCourse } from '@/lib/academy-data';
 import type { CourseCurriculum, CourseLesson } from '@/lib/curriculum-data';
 import {
+  getAcademyAuthHeader,
   getStoredAcademySession,
   type AcademySession,
 } from '@/lib/academy-session';
@@ -178,9 +179,27 @@ export function CourseDetailPage({
   });
 
   const freeCourse = isFreeCourse(course);
+  // The final exam is not counted as a lesson.
   const totalLessons = useMemo(
-    () => curriculum.sections.reduce((sum, section) => sum + section.lessons.length, 0),
+    () =>
+      curriculum.sections.reduce(
+        (sum, section) =>
+          sum + section.lessons.filter((lesson) => lesson.type !== 'quiz').length,
+        0,
+      ),
     [curriculum.sections],
+  );
+  const completedContentLessons = useMemo(
+    () =>
+      curriculum.sections.reduce(
+        (sum, section) =>
+          sum +
+          section.lessons.filter(
+            (lesson) => lesson.type !== 'quiz' && completedLessonIds.has(lesson.id),
+          ).length,
+        0,
+      ),
+    [curriculum.sections, completedLessonIds],
   );
   const previewLessons = useMemo(
     () =>
@@ -201,7 +220,7 @@ export function CourseDetailPage({
     [course.outcomes],
   );
   const progressPercent = totalLessons
-    ? Math.min(100, Math.round((completedLessonIds.size / totalLessons) * 100))
+    ? Math.min(100, Math.round((completedContentLessons / totalLessons) * 100))
     : 0;
 
   useEffect(() => {
@@ -224,9 +243,46 @@ export function CourseDetailPage({
   }, [course.id]);
 
   useEffect(() => {
-    const storedProgress = getStoredCourseProgress(course.id);
-    setCourseStarted(Boolean(storedProgress));
-    setCompletedLessonIds(new Set(storedProgress?.completedLessonIds || []));
+    const useLocalProgress = () => {
+      const storedProgress = getStoredCourseProgress(course.id);
+      setCourseStarted(Boolean(storedProgress));
+      setCompletedLessonIds(new Set(storedProgress?.completedLessonIds || []));
+    };
+
+    const activeSession = getStoredAcademySession();
+    if (!activeSession) {
+      useLocalProgress();
+      return;
+    }
+
+    // Logged in: the server is the truth. What this browser remembers is only a
+    // fallback for when the server cannot be reached.
+    let cancelled = false;
+
+    fetch('/api/academy/me', { headers: getAcademyAuthHeader(activeSession) })
+      .then(
+        (response) =>
+          (response.ok ? response.json() : null) as Promise<{ progress?: Record<string, string[]> } | null>,
+      )
+      .then((payload) => {
+        if (cancelled) return;
+
+        if (!payload) {
+          useLocalProgress();
+          return;
+        }
+
+        const completed = payload.progress?.[course.id] || [];
+        setCompletedLessonIds(new Set(completed));
+        setCourseStarted(completed.length > 0);
+      })
+      .catch(() => {
+        if (!cancelled) useLocalProgress();
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [course.id]);
 
   useEffect(() => {
@@ -521,7 +577,7 @@ export function CourseDetailPage({
             <div className="mt-4">
               <div className="flex justify-between text-xs font-bold text-[#cfc8de]">
                 <span>Course started</span>
-                <span>{completedLessonIds.size}/{totalLessons || course.lessons} lessons</span>
+                <span>{completedContentLessons}/{totalLessons || course.lessons} lessons</span>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
                 <div

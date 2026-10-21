@@ -83,14 +83,22 @@ export async function GET(request: Request) {
       const completedIds = new Set(
         completedLessonsByCourse[enrollment.course_id] || [],
       );
-      const completedLessons = allLessons.filter((lesson) =>
+      // The final exam is not shown as a lesson, but the course is only complete
+      // once it has been passed, so the percentage still includes it.
+      const contentLessons = allLessons.filter((lesson) => lesson.type !== 'quiz');
+      const exam = allLessons.find((lesson) => lesson.type === 'quiz');
+      const completedContent = contentLessons.filter((lesson) =>
         completedIds.has(lesson.id),
       ).length;
-      const totalLessons = Math.max(allLessons.length, course.lessons || 1);
-      const progressPercent =
-        totalLessons > 0
-          ? Math.min(100, Math.round((completedLessons / totalLessons) * 100))
-          : 0;
+      const examPassed = exam ? completedIds.has(exam.id) : true;
+      const completedAll = completedContent + (exam && examPassed ? 1 : 0);
+      const totalAll = Math.max(allLessons.length, 1);
+      const totalLessons = Math.max(contentLessons.length, 1);
+      const completedLessons = completedContent;
+      const progressPercent = Math.min(
+        100,
+        Math.round((completedAll / totalAll) * 100),
+      );
       const nextLesson =
         allLessons.find((lesson) => !completedIds.has(lesson.id)) ||
         allLessons[allLessons.length - 1];
@@ -111,6 +119,7 @@ export async function GET(request: Request) {
         accent: course.accent,
         status: enrollment.status,
         certificate,
+        examPending: Boolean(exam) && !examPassed && completedContent >= contentLessons.length,
       };
     }));
 
