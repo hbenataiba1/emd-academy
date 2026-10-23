@@ -1,3 +1,6 @@
+import { after } from 'next/server';
+
+import { notifyFreeEnrollment } from '@/lib/academy-notify';
 import {
   explainSupabaseEnrollmentError,
   getAcademyEnrollmentForUser,
@@ -84,6 +87,16 @@ export async function POST(request: Request) {
       currency: 'usd',
       status: 'active',
     });
+
+    after(() =>
+      notifyFreeEnrollment({
+        userId: user.id!,
+        email: user.email!,
+        name: getAcademyDisplayName(user),
+        courseId: course.id,
+        courseTitle: course.title,
+      }),
+    );
 
     return json({ enrolled: true, course, enrollment });
   } catch (error) {

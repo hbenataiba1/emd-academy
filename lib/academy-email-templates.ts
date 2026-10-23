@@ -1,6 +1,6 @@
-const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'https://easymedicaldevice.com').replace(/\/$/, '');
+export const SITE = (process.env.NEXT_PUBLIC_SITE_URL || 'https://easymedicaldevice.com').replace(/\/$/, '');
 
-function escapeHtml(value: string) {
+export function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -18,7 +18,7 @@ type Layout = {
 };
 
 /** Shared look of every Academy email: purple header, white card, one button. */
-function layout({ preview, eyebrow, title, content, cta }: Layout) {
+export function layout({ preview, eyebrow, title, content, cta }: Layout) {
   return `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>

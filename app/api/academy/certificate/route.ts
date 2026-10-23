@@ -1,3 +1,6 @@
+import { after } from 'next/server';
+
+import { notifyCertificateReady } from '@/lib/academy-notify';
 import {
   academyRestFetch,
   getAcademyCourseForAccess,
@@ -95,6 +98,18 @@ async function handleCertificateRequest(request: Request) {
     }
 
     const certificate = await ensureCertificate(user.id, body.courseId);
+
+    // Only a certificate issued just now sends the email (old ones are skipped inside).
+    const course = await getAcademyCourseForAccess(body.courseId);
+    after(() =>
+      notifyCertificateReady({
+        userId: user.id!,
+        email: user.email!,
+        courseTitle: course?.title || 'your course',
+        certificate,
+      }),
+    );
+
     return json({ certificate });
   } catch (error) {
     return json(

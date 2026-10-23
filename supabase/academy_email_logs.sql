@@ -11,7 +11,7 @@ create table if not exists public.email_logs (
   subject text,
   -- queued | sent | delivered | opened | clicked | failed | bounced | complained
   status text not null default 'queued',
-  provider text not null default 'resend',
+  provider text not null default 'microsoft',
   provider_message_id text,
   -- Stops an email that must be sent once (like the welcome) from going out twice.
   dedupe_key text unique,

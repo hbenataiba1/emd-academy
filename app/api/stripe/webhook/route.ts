@@ -1,4 +1,7 @@
+import { after } from 'next/server';
+
 import { cleanEnv, json } from '@/lib/academy-auth';
+import { notifyAbandonedCheckout, notifyPaymentFailed } from '@/lib/academy-notify';
 import {
   completeCheckoutSession,
   type StripeCheckoutSession,
@@ -9,6 +12,17 @@ type StripeEvent = {
   data?: {
     object?: StripeCheckoutSession;
   };
+};
+
+type StripePaymentIntent = {
+  id: string;
+  metadata?: {
+    user_id?: string;
+    learner_email?: string;
+    course_id?: string;
+    course_title?: string;
+  } | null;
+  last_payment_error?: { message?: string } | null;
 };
 
 export async function POST(request: Request) {
@@ -30,6 +44,22 @@ export async function POST(request: Request) {
     const session = event.data?.object;
     if (session?.metadata?.user_id && session.metadata.course_id) {
       await completeCheckoutSession(session);
+    }
+  }
+
+  // A checkout nobody paid (it expires a few hours after it was started).
+  if (event.type === 'checkout.session.expired') {
+    const session = event.data?.object;
+    if (session?.metadata?.user_id && session.metadata.course_id) {
+      after(() => notifyAbandonedCheckout(session));
+    }
+  }
+
+  // A card that was declined: the learner gets a way to try again.
+  if (event.type === 'payment_intent.payment_failed') {
+    const intent = event.data?.object as unknown as StripePaymentIntent | undefined;
+    if (intent?.metadata?.user_id && intent.metadata.course_id) {
+      after(() => notifyPaymentFailed(intent));
     }
   }
 

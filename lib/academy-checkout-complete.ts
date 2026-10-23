@@ -1,4 +1,7 @@
+import { after } from 'next/server';
+
 import { academyRestFetch, saveAcademyEnrollment } from '@/lib/academy-auth';
+import { notifyPurchase } from '@/lib/academy-notify';
 import { markRedemptionRedeemed } from '@/lib/academy-coupons';
 
 export type StripeCheckoutSession = {
@@ -72,4 +75,7 @@ export async function completeCheckoutSession(session: StripeCheckoutSession) {
     prefer: 'resolution=merge-duplicates,return=minimal',
     useServiceRole: true,
   });
+
+  // The webhook and the instant check can both run this: the email goes out once.
+  after(() => notifyPurchase({ userId, email: learnerEmail }, session));
 }

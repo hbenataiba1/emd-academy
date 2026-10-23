@@ -1,6 +1,10 @@
+import { after } from 'next/server';
+
+import { notifyFreeEnrollment } from '@/lib/academy-notify';
 import {
   cleanEnv,
   getAcademyCourseForAccess,
+  getAcademyEnrollmentForUser,
   getAcademyDisplayName,
   getAcademyUserFromRequest,
   isFreeCourse,
@@ -45,6 +49,8 @@ export async function POST(request: Request) {
   }
 
   if (isFreeCourse(course)) {
+    const alreadyEnrolled = await isAlreadyEnrolled(user.id, user.email, course.id);
+
     try {
       await saveAcademyEnrollment({
         userId: user.id,
@@ -63,6 +69,18 @@ export async function POST(request: Request) {
           ),
         },
         502,
+      );
+    }
+
+    if (!alreadyEnrolled) {
+      after(() =>
+        notifyFreeEnrollment({
+          userId: user.id!,
+          email: user.email!,
+          name: getAcademyDisplayName(user),
+          courseId: course.id,
+          courseTitle: course.title,
+        }),
       );
     }
 
@@ -109,6 +127,8 @@ export async function POST(request: Request) {
 
     // The coupon covers the whole price: unlock the course without a payment.
     if (result.finalCents <= 0) {
+      const alreadyEnrolled = await isAlreadyEnrolled(user.id, user.email, course.id);
+
       try {
         await saveAcademyEnrollment({
           userId: user.id,
@@ -137,6 +157,18 @@ export async function POST(request: Request) {
         learnerEmail: user.email,
         discountCents: result.discountCents,
       });
+
+      if (!alreadyEnrolled) {
+        after(() =>
+          notifyFreeEnrollment({
+            userId: user.id!,
+            email: user.email!,
+            name: getAcademyDisplayName(user),
+            courseId: course.id,
+            courseTitle: course.title,
+          }),
+        );
+      }
 
       return json({ enrolled: true, course });
     }
@@ -223,6 +255,8 @@ export async function POST(request: Request) {
   } else {
     // Stripe does not allow its own promotion-code box together with a discount.
     params.set('allow_promotion_codes', 'true');
+    // An unpaid checkout expires after 3 hours; that is when the reminder email goes out.
+    params.set('expires_at', String(Math.floor(Date.now() / 1000) + 3 * 60 * 60));
   }
   params.set('client_reference_id', `${user.id}:${course.id}`);
   params.set('customer_email', user.email);
@@ -246,6 +280,11 @@ export async function POST(request: Request) {
   params.set('metadata[course_title]', course.title);
   params.set('metadata[user_id]', user.id);
   params.set('metadata[learner_email]', user.email);
+  // The same details on the payment itself, so a failed payment can be matched to the learner.
+  params.set('payment_intent_data[metadata][course_id]', course.id);
+  params.set('payment_intent_data[metadata][course_title]', course.title);
+  params.set('payment_intent_data[metadata][user_id]', user.id);
+  params.set('payment_intent_data[metadata][learner_email]', user.email);
 
   const stripeResponse = await fetch(
     'https://api.stripe.com/v1/checkout/sessions',
@@ -314,6 +353,15 @@ export async function POST(request: Request) {
   }
 
   return json({ url: payload.url });
+}
+
+async function isAlreadyEnrolled(userId: string, email: string, courseId: string) {
+  try {
+    const existing = await getAcademyEnrollmentForUser({ userId, learnerEmail: email, courseId });
+    return existing?.status === 'active' || existing?.status === 'completed';
+  } catch {
+    return false;
+  }
 }
 
 async function readCheckoutBody(request: Request): Promise<CheckoutBody> {

@@ -404,7 +404,7 @@ export function AcademyPage({
           </div>
 
           {/* Hero Right: Photo + floating badges */}
-          <div className="relative mx-auto w-full max-w-[420px] lg:max-w-none">
+          <div className="relative mx-auto mb-5 w-full max-w-[420px] sm:mb-0 lg:max-w-none">
 
             {/* Main photo */}
             <div className="relative overflow-hidden rounded-2xl shadow-[0_32px_80px_rgb(35_28_61/18%)]">
@@ -416,21 +416,21 @@ export function AcademyPage({
             </div>
 
             {/* Badge — top left */}
-            <div className="absolute -left-2 top-6 flex max-w-[150px] sm:-left-6 sm:top-8 sm:max-w-[170px] flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
+            <div className="absolute -left-2 top-6 hidden max-w-[150px] sm:-left-6 sm:top-8 sm:flex sm:max-w-[170px] flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
               <ShieldCheck className="size-5 text-[#7c3aed]" />
               <p className="mt-0.5 text-sm font-bold text-[#191625] leading-tight">MDR Certified</p>
               <p className="text-xs text-[#706982] leading-snug">EU-approved compliance pathway</p>
             </div>
 
             {/* Badge — top right */}
-            <div className="absolute -right-2 top-4 flex max-w-[145px] sm:-right-6 sm:top-6 sm:max-w-[165px] flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
+            <div className="absolute -bottom-4 -right-2 flex max-w-[145px] sm:bottom-auto sm:-right-6 sm:top-6 sm:max-w-[165px] flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
               <Award className="size-5 text-[#f6b44b]" />
               <p className="mt-0.5 text-sm font-bold text-[#191625] leading-tight">Verified Certificate</p>
               <p className="text-xs text-[#706982] leading-snug">Shareable on LinkedIn</p>
             </div>
 
             {/* Badge — bottom left */}
-            <div className="absolute -bottom-4 -left-2 hidden max-w-[175px] sm:-left-6 sm:flex flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
+            <div className="absolute -bottom-4 -left-2 flex max-w-[150px] sm:-left-6 sm:max-w-[175px] flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
               <GraduationCap className="size-5 text-[#08a99f]" />
               <p className="mt-0.5 text-sm font-bold text-[#191625] leading-tight">Expert Instructor</p>
               <p className="text-xs text-[#706982] leading-snug">15+ years in MedTech regulatory</p>
