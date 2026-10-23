@@ -3,7 +3,7 @@ import { SITE } from '@/lib/academy-email-templates';
 
 const GRAPH_BASE_URL = 'https://graph.microsoft.com/v1.0';
 const SENDER_NAME = 'Easy Medical Device Academy';
-const DEFAULT_SENDER = 'services@easymedicaldevice.com';
+const DEFAULT_SENDER = 'contacts@easymedicaldevice.com';
 
 export type AcademyEmailInput = {
   to: string;
