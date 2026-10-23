@@ -214,11 +214,17 @@ body {
 .celebrate-pulse { animation: celebrate-pulse 1.8s ease-out 1.2s infinite; }
 .celebrate-pulse-late { animation-delay: 2.1s; }
 .celebrate-glow { animation: celebrate-glow 4s ease-in-out infinite; }
+@keyframes celebrate-shine {
+  0%, 100% { box-shadow: 0 0 0 rgba(246, 180, 75, 0); }
+  50% { box-shadow: 0 0 36px rgba(246, 180, 75, 0.45); }
+}
+
+.celebrate-points { animation: celebrate-pop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both, celebrate-shine 2.4s ease-in-out 2s infinite; }
 .celebrate-countdown { animation-name: celebrate-countdown; animation-timing-function: linear; animation-fill-mode: both; }
 
 @media (prefers-reduced-motion: reduce) {
   .celebrate-pop, .celebrate-ring, .celebrate-check, .celebrate-rise,
-  .celebrate-pulse, .celebrate-glow, .celebrate-countdown { animation: none; opacity: 1; }
+  .celebrate-pulse, .celebrate-glow, .celebrate-countdown, .celebrate-points { animation: none; opacity: 1; }
   .celebrate-ring, .celebrate-check { stroke-dasharray: none; }
   .celebrate-pulse, .celebrate-glow { display: none; }
 }

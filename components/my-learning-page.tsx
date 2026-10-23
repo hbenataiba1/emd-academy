@@ -561,6 +561,13 @@ export default function MyLearningPage() {
                 Explore more courses
                 <ArrowRight className="size-4" />
               </Link>
+              <Link
+                href="/academy/career-record"
+                className="inline-flex items-center gap-2 rounded-lg border border-[#f6b44b]/60 bg-[#fff8eb] px-4 py-2.5 text-sm font-semibold text-[#b45309] transition hover:bg-[#ffefd0]"
+              >
+                <Trophy className="size-4" />
+                My Skill Points
+              </Link>
               <button
                 type="button"
                 onClick={signOut}

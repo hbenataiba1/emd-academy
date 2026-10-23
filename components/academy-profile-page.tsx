@@ -1,5 +1,6 @@
 'use client';
 
+import { AcademyAvatar } from '@/components/academy-avatar';
 import { FormEvent, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import {
@@ -156,17 +157,13 @@ export function AcademyProfilePage() {
           <div className="flex flex-wrap items-center justify-between gap-6 border-b border-[#ede8fb] pb-6">
             <div className="flex items-center gap-5">
               <div className="relative group shrink-0">
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt={fullName}
-                    className="size-20 rounded-full border-2 border-[#dcd5ee] object-cover shadow-sm sm:size-24"
-                  />
-                ) : (
-                  <div className="flex size-20 items-center justify-center rounded-full bg-[#7c3aed] text-2xl font-black text-white shadow-sm sm:size-24 sm:text-3xl">
-                    {initials}
-                  </div>
-                )}
+                <AcademyAvatar
+                  src={avatarUrl}
+                  alt={fullName}
+                  initials={initials}
+                  imageClassName="size-20 rounded-full border-2 border-[#dcd5ee] object-cover shadow-sm sm:size-24"
+                  fallbackClassName="flex size-20 items-center justify-center rounded-full bg-[#7c3aed] text-2xl font-black text-white shadow-sm sm:size-24 sm:text-3xl"
+                />
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}

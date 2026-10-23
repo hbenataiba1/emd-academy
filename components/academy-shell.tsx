@@ -1,5 +1,6 @@
 "use client";
 
+import { AcademyAvatar } from "@/components/academy-avatar";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -12,6 +13,7 @@ import {
   Globe,
   GraduationCap,
   Receipt,
+  Trophy,
   Laptop,
   ListChecks,
   LogOut,
@@ -239,13 +241,13 @@ function MobileMenu({
           {session ? (
             <div className="mt-4 rounded-2xl bg-[#f8f6ff] p-3">
               <div className="flex items-center gap-3 px-1 pb-2">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt={displayName} className="size-11 rounded-full object-cover ring-2 ring-[#7c3aed]/30" />
-                ) : (
-                  <div className="flex size-11 items-center justify-center rounded-full bg-[#7c3aed] text-sm font-bold text-white">
-                    {initials}
-                  </div>
-                )}
+                <AcademyAvatar
+                  src={avatarUrl}
+                  alt={displayName}
+                  initials={initials}
+                  imageClassName="size-11 rounded-full object-cover ring-2 ring-[#7c3aed]/30"
+                  fallbackClassName="flex size-11 items-center justify-center rounded-full bg-[#7c3aed] text-sm font-bold text-white"
+                />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-[#171321]">{displayName}</p>
                   <p className="truncate text-xs text-[#6e687d]">{session.user.email}</p>
@@ -253,6 +255,9 @@ function MobileMenu({
               </div>
               <Link href="/academy/my-learning" onClick={onClose} className={`${rowClass} ${activePage === "my-learning" ? activeRowClass : ""}`}>
                 <GraduationCap className="size-5 text-[#7c3aed]" /> My Learning
+              </Link>
+              <Link href="/academy/career-record" onClick={onClose} className={`${rowClass} ${activePage === "career" ? activeRowClass : ""}`}>
+                <Trophy className="size-5 text-[#7c3aed]" /> Career Record
               </Link>
               <Link href="/academy/billing" onClick={onClose} className={`${rowClass} ${activePage === "billing" ? activeRowClass : ""}`}>
                 <Receipt className="size-5 text-[#7c3aed]" /> Billing &amp; invoices
@@ -408,7 +413,7 @@ function MobileMenu({
 export function AcademyHeader({
   activePage = "home",
 }: {
-  activePage?: "home" | "my-learning" | "auth" | "profile" | "billing";
+  activePage?: "home" | "my-learning" | "auth" | "profile" | "billing" | "career";
 } = {}) {
   const [activeMegaMenu, setActiveMegaMenu] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -628,17 +633,13 @@ export function AcademyHeader({
                   className="flex items-center gap-2 rounded-full p-0.5 transition hover:ring-2 hover:ring-[#7c3aed]/40 focus:outline-none"
                   aria-label="User profile menu"
                 >
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt={displayName}
-                      className="size-9 rounded-full object-cover ring-2 ring-[#7c3aed]/30"
-                    />
-                  ) : (
-                    <div className="flex size-9 items-center justify-center rounded-full bg-[#7c3aed] text-xs font-bold text-white ring-2 ring-[#7c3aed]/30">
-                      {initials}
-                    </div>
-                  )}
+                  <AcademyAvatar
+                    src={avatarUrl}
+                    alt={displayName}
+                    initials={initials}
+                    imageClassName="size-9 rounded-full object-cover ring-2 ring-[#7c3aed]/30"
+                    fallbackClassName="flex size-9 items-center justify-center rounded-full bg-[#7c3aed] text-xs font-bold text-white ring-2 ring-[#7c3aed]/30"
+                  />
                   <ChevronDown
                     className={`size-3.5 text-[#6e687e] transition-transform duration-200 ${
                       profileOpen ? "rotate-180" : ""
@@ -650,17 +651,13 @@ export function AcademyHeader({
                   <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 rounded-2xl border border-[#ded6f3] bg-white p-2 shadow-[0_16px_40px_rgba(25,22,37,0.12)]">
                     {/* User info header */}
                     <div className="flex items-center gap-3 border-b border-[#ede8fb] px-3 py-3">
-                      {avatarUrl ? (
-                        <img
-                          src={avatarUrl}
-                          alt={displayName}
-                          className="size-10 rounded-full object-cover ring-1 ring-[#7c3aed]/20"
-                        />
-                      ) : (
-                        <div className="flex size-10 items-center justify-center rounded-full bg-[#7c3aed] text-sm font-bold text-white">
-                          {initials}
-                        </div>
-                      )}
+                      <AcademyAvatar
+                        src={avatarUrl}
+                        alt={displayName}
+                        initials={initials}
+                        imageClassName="size-10 rounded-full object-cover ring-1 ring-[#7c3aed]/20"
+                        fallbackClassName="flex size-10 items-center justify-center rounded-full bg-[#7c3aed] text-sm font-bold text-white"
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold text-[#171321]">
                           {displayName}
@@ -697,6 +694,19 @@ export function AcademyHeader({
                       >
                         <GraduationCap className="size-4 text-[#7c3aed]" />
                         <span>My Learning</span>
+                      </Link>
+
+                      <Link
+                        href="/academy/career-record"
+                        onClick={() => setProfileOpen(false)}
+                        className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                          activePage === "career"
+                            ? "bg-[#f4f0ff] font-bold text-[#7c3aed]"
+                            : "text-[#302945] hover:bg-[#f8f6ff] hover:text-[#6b34e9]"
+                        }`}
+                      >
+                        <Trophy className="size-4 text-[#7c3aed]" />
+                        <span>Career Record</span>
                       </Link>
 
                       <Link

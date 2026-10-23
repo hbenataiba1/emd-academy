@@ -2700,6 +2700,7 @@ export function CoursePlayer({
         <ExamCelebration
           score={quizScore}
           courseTitle={curriculum.title}
+          courseId={courseId}
           onContinue={() => setCelebrationDismissed(true)}
         />
       ) : null}

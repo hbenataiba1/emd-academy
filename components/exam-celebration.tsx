@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Award } from 'lucide-react';
+import { ArrowRight, Award, Trophy } from 'lucide-react';
+
+import { getAcademyAuthHeader, getStoredAcademySession } from '@/lib/academy-session';
+import { type CareerCourseInput, buildCareerRecord } from '@/lib/career-record';
 
 const AUTO_CONTINUE_MS = 8000;
 const COLORS = ['#7c3aed', '#b58dfb', '#34d4c6', '#f6b44b', '#ffffff', '#ff6b81'];
@@ -167,13 +170,46 @@ function useCountUp(target: number, durationMs = 1300, delayMs = 500) {
 export function ExamCelebration({
   score,
   courseTitle,
+  courseId,
   onContinue,
 }: {
   score: number;
   courseTitle: string;
+  courseId: string;
   onContinue: () => void;
 }) {
   const shownScore = useCountUp(score);
+  const [points, setPoints] = useState<{ earned: number; total: number } | null>(null);
+  const shownEarned = useCountUp(points?.earned ?? 0, 1200, 1500);
+  const shownTotal = useCountUp(points?.total ?? 0, 1200, 1500);
+
+  // The Skill Points this course adds to the learner's Career Record.
+  useEffect(() => {
+    const session = getStoredAcademySession();
+    if (!session) return;
+    let cancelled = false;
+
+    fetch('/api/academy/me', { headers: getAcademyAuthHeader(session) })
+      .then(
+        (response) =>
+          (response.ok ? response.json() : null) as Promise<{ courses?: CareerCourseInput[] } | null>,
+      )
+      .then((payload) => {
+        if (cancelled || !payload?.courses) return;
+        const courses = payload.courses.map((course) =>
+          course.id === courseId ? { ...course, progress: 100 } : course,
+        );
+        const record = buildCareerRecord(courses);
+        const earned = record.entries.find((entry) => entry.id === courseId)?.points;
+        if (earned) setPoints({ earned, total: record.totalPoints });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
+
   const continueRef = useRef(onContinue);
   continueRef.current = onContinue;
 
@@ -231,6 +267,21 @@ export function ExamCelebration({
           <span className="text-sm font-semibold text-[#cfc7e4]">Your score</span>
           <span className="text-3xl font-black tabular-nums text-white">{shownScore}%</span>
         </div>
+
+        {points ? (
+          <div
+            className="celebrate-pop celebrate-points mt-4 flex items-center gap-4 rounded-2xl border border-[#f6b44b]/40 bg-[#f6b44b]/10 px-6 py-3"
+            style={{ animationDelay: '1.4s' }}
+          >
+            <Trophy className="size-7 text-[#f6b44b]" aria-hidden="true" />
+            <div className="text-left">
+              <p className="text-3xl font-black tabular-nums text-[#f6b44b]">+{shownEarned} Skill Points</p>
+              <p className="text-xs font-semibold text-[#cfc7e4]">
+                Career Record total: <span className="font-black text-white tabular-nums">{shownTotal}</span>
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         <button
           type="button"

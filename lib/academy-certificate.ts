@@ -362,7 +362,22 @@ async function renderCertificateJpeg(payload: CertificateSvgPayload) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-function buildJpegPdf(jpeg: Uint8Array) {
+export type JpegPdfSize = {
+  width: number;
+  height: number;
+  pageWidth: number;
+  pageHeight: number;
+};
+
+const CERTIFICATE_PDF_SIZE: JpegPdfSize = {
+  width: 3200,
+  height: 2000,
+  pageWidth: 842,
+  pageHeight: 526,
+};
+
+/** Wraps one JPEG in a single-page PDF. */
+export function buildJpegPdf(jpeg: Uint8Array, size: JpegPdfSize = CERTIFICATE_PDF_SIZE) {
   const encoder = new TextEncoder();
   const chunks: Uint8Array[] = [];
   const offsets: number[] = [];
@@ -386,16 +401,16 @@ function buildJpegPdf(jpeg: Uint8Array) {
   object(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
   object(
     3,
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 526] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>',
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${size.pageWidth} ${size.pageHeight}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`,
   );
   object(4, () => {
     push(
-      `<< /Type /XObject /Subtype /Image /Width 3200 /Height 2000 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`,
+      `<< /Type /XObject /Subtype /Image /Width ${size.width} /Height ${size.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`,
     );
     push(jpeg);
     push('\nendstream');
   });
-  const content = 'q 842 0 0 526 0 0 cm /Im0 Do Q';
+  const content = `q ${size.pageWidth} 0 0 ${size.pageHeight} 0 0 cm /Im0 Do Q`;
   object(5, `<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
 
   const xref = length;
