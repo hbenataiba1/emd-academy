@@ -604,7 +604,7 @@ export function AcademyHeader({
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-6 text-sm font-medium text-[#514b63] md:flex">
+        <nav className="hidden items-center gap-6 text-sm font-medium text-[#514b63] lg:flex">
           <Link href="/academy#courses" className="transition hover:text-[#6b34e9]">Courses</Link>
           <Link href="/academy#certificate" className="transition hover:text-[#6b34e9]">Certificate</Link>
           <Link href="/academy#instructor" className="transition hover:text-[#6b34e9]">Instructor</Link>
@@ -616,7 +616,7 @@ export function AcademyHeader({
             <>
               <Link
                 href="/academy/my-learning"
-                className={`hidden rounded-lg px-3 py-2 text-sm transition sm:inline-flex ${
+                className={`hidden whitespace-nowrap rounded-lg px-3 py-2 text-sm transition sm:inline-flex ${
                   activePage === "my-learning"
                     ? "font-bold text-[#7c3aed] bg-white border border-[#ded6f3]"
                     : "font-semibold text-[#514b63] hover:bg-white hover:text-[#6b34e9]"
@@ -742,7 +742,7 @@ export function AcademyHeader({
             <>
               <Link
                 href="/academy/login"
-                className={`hidden rounded-lg px-3 py-2 text-sm transition sm:inline-flex ${
+                className={`hidden whitespace-nowrap rounded-lg px-3 py-2 text-sm transition sm:inline-flex ${
                   activePage === "auth"
                     ? "font-bold text-[#7c3aed] bg-white border border-[#ded6f3]"
                     : "font-semibold text-[#514b63] hover:bg-white hover:text-[#6b34e9]"
@@ -752,7 +752,7 @@ export function AcademyHeader({
               </Link>
               <Link
                 href="/academy/my-learning"
-                className={`hidden rounded-lg px-3 py-2 text-sm transition sm:inline-flex ${
+                className={`hidden whitespace-nowrap rounded-lg px-3 py-2 text-sm transition sm:inline-flex ${
                   activePage === "my-learning"
                     ? "font-bold text-[#7c3aed] bg-white border border-[#ded6f3]"
                     : "font-semibold text-[#514b63] hover:bg-white hover:text-[#6b34e9]"
@@ -763,7 +763,7 @@ export function AcademyHeader({
               {activePage === "my-learning" ? (
                 <Link
                   href="/academy#courses"
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#7c3aed] px-3.5 text-sm font-semibold text-white transition hover:bg-[#6d31dc] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#7c3aed]/20"
+                  className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#7c3aed] px-3.5 text-sm font-semibold text-white transition hover:bg-[#6d31dc] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#7c3aed]/20"
                 >
                   Browse catalog
                   <ArrowRight className="size-4" aria-hidden="true" />
@@ -771,7 +771,7 @@ export function AcademyHeader({
               ) : (
                 <Link
                   href="/academy/signup?next=/academy/my-learning"
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#7c3aed] px-3.5 text-sm font-semibold text-white transition hover:bg-[#6d31dc] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#7c3aed]/20"
+                  className="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[#7c3aed] px-3.5 text-sm font-semibold text-white transition hover:bg-[#6d31dc] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#7c3aed]/20"
                 >
                   Start learning
                   <ArrowRight className="size-4" aria-hidden="true" />

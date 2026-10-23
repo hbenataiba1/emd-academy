@@ -373,7 +373,7 @@ export function AcademyPage({
       <AcademyHeader activePage="home" />
 
       <section className="bg-[#f8f6ff]">
-        <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 md:grid-cols-[minmax(0,1fr)_minmax(360px,0.84fr)] lg:px-8 lg:py-16">
+        <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.84fr)] lg:px-8 lg:py-16">
           <div>
             <h1 className="max-w-4xl text-4xl font-bold leading-[1.06] text-[#171321] sm:text-5xl lg:text-6xl">
               Learn medical device compliance from real-world experts
@@ -416,21 +416,21 @@ export function AcademyPage({
             </div>
 
             {/* Badge — top left */}
-            <div className="absolute -left-6 top-8 flex max-w-[170px] flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
+            <div className="absolute -left-2 top-6 flex max-w-[150px] sm:-left-6 sm:top-8 sm:max-w-[170px] flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
               <ShieldCheck className="size-5 text-[#7c3aed]" />
               <p className="mt-0.5 text-sm font-bold text-[#191625] leading-tight">MDR Certified</p>
               <p className="text-xs text-[#706982] leading-snug">EU-approved compliance pathway</p>
             </div>
 
             {/* Badge — top right */}
-            <div className="absolute -right-6 top-6 flex max-w-[165px] flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
+            <div className="absolute -right-2 top-4 flex max-w-[145px] sm:-right-6 sm:top-6 sm:max-w-[165px] flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
               <Award className="size-5 text-[#f6b44b]" />
               <p className="mt-0.5 text-sm font-bold text-[#191625] leading-tight">Verified Certificate</p>
               <p className="text-xs text-[#706982] leading-snug">Shareable on LinkedIn</p>
             </div>
 
             {/* Badge — bottom left */}
-            <div className="absolute -bottom-4 -left-6 flex max-w-[175px] flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
+            <div className="absolute -bottom-4 -left-2 hidden max-w-[175px] sm:-left-6 sm:flex flex-col gap-1 rounded-2xl border border-[#ede8fb] bg-white px-4 py-3 shadow-[0_8px_30px_rgb(35_28_61/12%)]">
               <GraduationCap className="size-5 text-[#08a99f]" />
               <p className="mt-0.5 text-sm font-bold text-[#191625] leading-tight">Expert Instructor</p>
               <p className="text-xs text-[#706982] leading-snug">15+ years in MedTech regulatory</p>

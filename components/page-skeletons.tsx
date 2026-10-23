@@ -121,9 +121,9 @@ export function AcademyHomeSkeleton() {
             <Bar className="h-12 w-3/5 sm:h-14" />
             <Bar className="h-4 w-full max-w-lg" />
             <Bar className="h-4 w-5/6 max-w-lg" />
-            <div className="flex gap-3 pt-2">
-              <Bar className="h-11 w-36 rounded-lg" />
-              <Bar className="h-11 w-44 rounded-lg" />
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Bar className="h-11 w-36 max-w-full rounded-lg" />
+              <Bar className="h-11 w-44 max-w-full rounded-lg" />
             </div>
           </div>
           <Bar className="aspect-[4/3] w-full rounded-2xl" />

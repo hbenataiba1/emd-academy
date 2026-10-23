@@ -360,6 +360,11 @@ export function CoursePlayer({
 
   // Sidebar controls
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // On phones and tablets the curriculum is a slide-over drawer, closed until asked for.
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 1023px)').matches) setSidebarOpen(false);
+  }, []);
   const mainScrollRef = useRef<HTMLDivElement | null>(null);
   const [readProgress, setReadProgress] = useState(0);
 
@@ -1161,7 +1166,20 @@ export function CoursePlayer({
           </h1>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          {/* Course content (opens the curriculum drawer on small screens) */}
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className={`items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-semibold text-[#d0c9e2] transition hover:bg-white/10 ${
+              sidebarOpen ? 'hidden' : 'flex'
+            }`}
+            aria-label="Open course content"
+          >
+            <PanelRightOpen className="size-3.5" />
+            <span className="hidden sm:inline">Course content</span>
+          </button>
+
           {/* Progress Indicator */}
           <div className="relative group">
             <button
@@ -2533,7 +2551,14 @@ export function CoursePlayer({
 
         {/* RIGHT SIDEBAR: COURSE CONTENT */}
         {sidebarOpen && (
-          <aside className="flex min-h-0 w-80 shrink-0 flex-col border-l border-white/10 bg-[#14101e] md:w-96">
+          <div
+            className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+        {sidebarOpen && (
+          <aside className="fixed inset-y-0 right-0 z-50 flex min-h-0 w-[88vw] max-w-sm flex-col border-l border-white/10 bg-[#14101e] shadow-2xl lg:static lg:z-auto lg:w-80 lg:max-w-none lg:shrink-0 lg:shadow-none xl:w-96">
             {/* Sidebar Navigation Top Header */}
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
               <h2 className="text-sm font-bold text-white">Course content</h2>
@@ -2608,6 +2633,9 @@ export function CoursePlayer({
                                     setActiveLessonId(lesson.id);
                                     setCurrentTime(0);
                                     setIsPlaying(true);
+                                    if (window.matchMedia('(max-width: 1023px)').matches) {
+                                      setSidebarOpen(false);
+                                    }
                                   }}
                                   data-active-lesson={isActive ? 'true' : undefined}
                                   aria-current={isActive ? 'true' : undefined}
