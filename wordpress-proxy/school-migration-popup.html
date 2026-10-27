@@ -1,0 +1,226 @@
+<script>
+(function () {
+  try {
+    // ── Settings ──────────────────────────────────────────────────────────────
+    // How long the popup stays hidden after a click. 0 = it comes back on the very
+    // next page or refresh.
+    var HIDE_MINUTES_AFTER_STAY = 0;       // "Stay on the old version"
+    var HIDE_MINUTES_AFTER_SHOP = 0;       // "Buy templates here"
+    // ───────────────────────────────────────────────────────────────────────────
+    var KEY_PREFIX = 'emd_school_popup_v3_';
+    var NEW_URL = 'https://easymedicaldevice.com/academy?utm_source=school&utm_medium=popup&utm_campaign=new-platform';
+    var BAR_URL = 'https://easymedicaldevice.com/academy?utm_source=school&utm_medium=topbar&utm_campaign=new-platform';
+    var SHOP_URL = 'https://school.easymedicaldevice.com/shop/';
+
+    function remembered() {
+      var choices = [];
+      if (HIDE_MINUTES_AFTER_STAY > 0) choices.push('stay');
+      if (HIDE_MINUTES_AFTER_SHOP > 0) choices.push('shop');
+      for (var i = 0; i < choices.length; i += 1) {
+        var key = KEY_PREFIX + choices[i];
+        try {
+          var until = Number(window.localStorage.getItem(key) || 0);
+          if (until > Date.now()) return true;
+        } catch (e) {}
+        if (document.cookie.indexOf(key + '=') !== -1) return true;
+      }
+      return false;
+    }
+
+    function remember(choice, minutes) {
+      if (!minutes || minutes <= 0) return; // nothing to remember: it shows again next time
+      var key = KEY_PREFIX + choice;
+      var until = Date.now() + minutes * 60000;
+      try { window.localStorage.setItem(key, String(until)); } catch (e) {}
+      document.cookie = key + '=1; expires=' + new Date(until).toUTCString() + '; path=/; SameSite=Lax';
+    }
+
+    function start() {
+      try {
+        var body = document.body;
+        if (!body || document.getElementById('emd-popup-overlay')) return;
+
+        // Not while building pages, not on the templates shop (shop and product pages),
+        // and never in the way of paying for something.
+        var blocked =
+          body.classList.contains('elementor-editor-active') ||
+          /[?&](elementor-preview|customize_changeset_uuid|fl_builder)/.test(window.location.search) ||
+          /\/(shop|product|product-category|product-tag|cart|checkout|my-account)(\/|$)/.test(window.location.pathname);
+
+        if (blocked || remembered()) return;
+
+        var css =
+          '#emd-popup-overlay{position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:rgba(20,12,40,.72);font-family:Helvetica,Arial,sans-serif;animation:emd-fade .3s ease-out both}' +
+          '#emd-popup-card{position:relative;width:100%;max-width:520px;max-height:94vh;overflow-y:auto;border-radius:20px;background:#fff;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.45);animation:emd-pop .45s cubic-bezier(.2,.9,.3,1.15) both}' +
+          '#emd-popup-head{padding:30px 28px 26px;color:#fff;background:#3b0764;background-image:linear-gradient(135deg,#3b0764,#7c3aed)}' +
+          '#emd-popup-head .emd-eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:3px;color:#34d4c6}' +
+          '#emd-popup-head h2{margin:14px 0 0;padding:0;font-size:28px;line-height:1.2;font-weight:800;color:#fff;text-transform:none}' +
+          '#emd-popup-body{padding:26px 28px 30px;color:#302945}' +
+          '#emd-popup-body p{margin:0 0 18px;font-size:16px;line-height:1.6;color:#4a4360}' +
+          '#emd-popup-list{list-style:none;margin:0 0 22px;padding:0;text-align:left;display:inline-block;font-size:15px;color:#302945}' +
+          '#emd-popup-list li{margin:7px 0;padding:0 0 0 26px;position:relative;list-style:none}' +
+          '#emd-popup-list li:before{content:"\\2713";position:absolute;left:0;top:1px;width:18px;height:18px;border-radius:9px;background:#f4f0ff;color:#7c3aed;font-size:12px;font-weight:800;line-height:18px;text-align:center}' +
+          '.emd-btn{display:block;width:100%;box-sizing:border-box;margin:10px 0 0;padding:14px 18px;border-radius:12px;font-size:16px;font-weight:700;line-height:1.3;text-align:center;text-decoration:none!important;cursor:pointer;font-family:inherit;transition:transform .15s ease,background .15s ease}' +
+          '.emd-btn:hover{transform:translateY(-1px)}' +
+          '#emd-btn-new{background:#7c3aed;color:#fff!important;border:2px solid #7c3aed}#emd-btn-new:hover{background:#6d31dc}' +
+          '#emd-btn-shop{background:#fff8eb;color:#b45309!important;border:2px solid #f6b44b}#emd-btn-shop:hover{background:#ffefd0}' +
+          '#emd-btn-old{background:transparent;color:#6e687d!important;border:2px solid #e4ddf4;font-weight:600}#emd-btn-old:hover{background:#faf8ff}' +
+          '@keyframes emd-fade{from{opacity:0}to{opacity:1}}' +
+          '@keyframes emd-pop{from{opacity:0;transform:scale(.92) translateY(14px)}to{opacity:1;transform:none}}' +
+          '@media (max-width:480px){#emd-popup-head{padding:24px 20px 20px}#emd-popup-head h2{font-size:23px}#emd-popup-body{padding:20px 20px 24px}#emd-popup-body p{font-size:15px}}' +
+          '@media (prefers-reduced-motion:reduce){#emd-popup-overlay,#emd-popup-card{animation:none}}';
+
+        var style = document.createElement('style');
+        style.id = 'emd-popup-style';
+        style.appendChild(document.createTextNode(css));
+        document.head.appendChild(style);
+
+        var overlay = document.createElement('div');
+        overlay.id = 'emd-popup-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-labelledby', 'emd-popup-title');
+        overlay.innerHTML =
+          '<div id="emd-popup-card">' +
+            '<div id="emd-popup-head">' +
+              '<p class="emd-eyebrow">EASY MEDICAL DEVICE ACADEMY</p>' +
+              '<h2 id="emd-popup-title">We have a brand-new learning platform</h2>' +
+            '</div>' +
+            '<div id="emd-popup-body">' +
+              '<p>The Academy has moved to a faster, modern platform. Come and see what is new:</p>' +
+              '<ul id="emd-popup-list">' +
+                '<li>New and updated medical device courses</li>' +
+                '<li>Verified certificates with a QR code</li>' +
+                '<li>Skill Points and a Career Record</li>' +
+                '<li>Works great on phone and tablet</li>' +
+              '</ul>' +
+              '<a id="emd-btn-new" class="emd-btn" href="' + NEW_URL + '">Go to the new platform</a>' +
+              '<a id="emd-btn-shop" class="emd-btn" href="' + SHOP_URL + '">Buy templates here</a>' +
+              '<button id="emd-btn-old" class="emd-btn" type="button">Stay on the old version</button>' +
+            '</div>' +
+          '</div>';
+        body.appendChild(overlay);
+
+        var previousOverflow = body.style.overflow;
+        body.style.overflow = 'hidden';
+
+        document.getElementById('emd-btn-old').addEventListener('click', function () {
+          remember('stay', HIDE_MINUTES_AFTER_STAY);
+          overlay.parentNode.removeChild(overlay);
+          body.style.overflow = previousOverflow;
+        });
+
+        // Buying templates counts as a choice too: the popup stops showing.
+        document.getElementById('emd-btn-shop').addEventListener('click', function () {
+          remember('shop', HIDE_MINUTES_AFTER_SHOP);
+        });
+
+        // Keep keyboard focus inside the popup.
+        overlay.addEventListener('keydown', function (event) {
+          if (event.key !== 'Tab') return;
+          var items = overlay.querySelectorAll('a, button');
+          var first = items[0];
+          var last = items[items.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        });
+
+        document.getElementById('emd-btn-new').focus();
+      } catch (e) {
+        // If anything goes wrong the popup simply does not show: the site is never affected.
+      }
+    }
+
+    // The line at the very top of every page: "you are using the old version".
+    function showBar() {
+      try {
+        var body = document.body;
+        if (!body || document.getElementById('emd-topbar')) return;
+        if (body.classList.contains('elementor-editor-active')) return;
+        if (/[?&](elementor-preview|customize_changeset_uuid|fl_builder)/.test(window.location.search)) return;
+
+        var css =
+          '#emd-topbar{position:fixed;top:0;left:0;right:0;z-index:2147482000;width:100%;box-sizing:border-box;padding:10px 16px;background:#3b0764;background-image:linear-gradient(90deg,#3b0764,#7c3aed);color:#fff;text-align:center;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.4}' +
+          '#emd-topbar .emd-topbar-text{margin:0 8px 0 0;color:#fff}' +
+          '#emd-topbar a{display:inline-block;margin:2px 0;padding:5px 14px;border-radius:999px;background:#34d4c6;color:#08110f!important;font-weight:700;text-decoration:none!important;white-space:nowrap}' +
+          '#emd-topbar a:hover{background:#5ee7dc}' +
+          '@media (max-width:480px){#emd-topbar{font-size:13px;padding:9px 12px}}';
+
+        var style = document.createElement('style');
+        style.id = 'emd-topbar-style';
+        style.appendChild(document.createTextNode(css));
+        document.head.appendChild(style);
+
+        var bar = document.createElement('div');
+        bar.id = 'emd-topbar';
+        bar.setAttribute('role', 'region');
+        bar.setAttribute('aria-label', 'New platform');
+        bar.innerHTML =
+          '<span class="emd-topbar-text">You are now using the <strong>old version</strong> of the Academy.</span>' +
+          '<a href="' + BAR_URL + '">Switch to the new version &rarr;</a>';
+        body.insertBefore(bar, body.firstChild);
+
+        // The line stays fixed at the top, so the page is pushed down by its height, and
+        // any menu that is also stuck to the top is moved down below it.
+        var basePadding = parseFloat(window.getComputedStyle(body).paddingTop) || 0;
+        var lastScan = 0;
+
+        function adminBarHeight() {
+          var admin = document.getElementById('wpadminbar');
+          return admin && window.getComputedStyle(admin).position === 'fixed' ? admin.offsetHeight : 0;
+        }
+
+        function shiftStuckHeaders(height, offset) {
+          var candidates = document.querySelectorAll(
+            'header, nav, [id*="header" i], [class*="header" i], [class*="sticky" i], [class*="navbar" i], [class*="masthead" i]'
+          );
+          for (var i = 0; i < candidates.length; i += 1) {
+            var el = candidates[i];
+            if (el === bar || bar.contains(el) || el.id === 'wpadminbar' || el.closest('#wpadminbar')) continue;
+            var cs = window.getComputedStyle(el);
+            if (cs.position !== 'fixed' && cs.position !== 'sticky') continue;
+            if (el.dataset.emdOriginalTop === undefined) {
+              var current = parseFloat(cs.top);
+              if (isNaN(current) || current > offset + 2) continue; // not stuck to the top
+              el.dataset.emdOriginalTop = String(current);
+            }
+            el.style.setProperty('top', (parseFloat(el.dataset.emdOriginalTop) + height) + 'px', 'important');
+          }
+        }
+
+        function layout() {
+          var height = bar.offsetHeight;
+          var offset = adminBarHeight();
+          bar.style.top = offset + 'px';
+          body.style.setProperty('padding-top', (basePadding + height) + 'px', 'important');
+          shiftStuckHeaders(height, offset);
+        }
+
+        layout();
+        window.addEventListener('resize', layout);
+        window.addEventListener('load', layout);
+        // Some themes make their menu sticky only after scrolling: check again, not too often.
+        window.addEventListener('scroll', function () {
+          var now = Date.now();
+          if (now - lastScan < 300) return;
+          lastScan = now;
+          shiftStuckHeaders(bar.offsetHeight, adminBarHeight());
+        }, { passive: true });
+      } catch (e) {
+        // If anything goes wrong the line simply does not show.
+      }
+    }
+
+    function run() {
+      showBar();
+      setTimeout(start, 600);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', run);
+    } else {
+      run();
+    }
+  } catch (e) {}
+})();
+</script>

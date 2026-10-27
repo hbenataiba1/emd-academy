@@ -253,8 +253,8 @@ export async function POST(request: Request) {
     params.set('metadata[coupon_id]', applied.coupon.id);
     params.set('metadata[coupon_code]', applied.coupon.code);
   } else {
-    // Stripe does not allow its own promotion-code box together with a discount.
-    params.set('allow_promotion_codes', 'true');
+    // Stripe's own promotion-code box is not offered: discounts only come from the
+    // coupons managed in the CRM, which are checked and tracked by the academy.
     // An unpaid checkout expires after 3 hours; that is when the reminder email goes out.
     params.set('expires_at', String(Math.floor(Date.now() / 1000) + 3 * 60 * 60));
   }
