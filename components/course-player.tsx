@@ -2590,11 +2590,8 @@ export function CoursePlayer({
                     return (
                       <div key={section.id} className="bg-[#14101e]">
                         {/* Section Header */}
-                        <button
-                          type="button"
-                          onClick={() => toggleSectionExpand(section.id)}
-                          className="flex w-full items-start justify-between p-4 text-left transition hover:bg-white/5"
-                        >
+                        {curriculum.sections.length > 1 ? (
+                        <div className="flex w-full items-start justify-between p-4 text-left">
                           <div className="pr-2">
                             <h3 className="text-xs font-bold text-white sm:text-sm">
                               {section.lessons.some((l) => l.id === activeLessonId) ? (
@@ -2607,15 +2604,11 @@ export function CoursePlayer({
                               {visibleLessons.reduce((acc, l) => acc + Math.round(l.durationSeconds / 60), 0)} min
                             </p>
                           </div>
-                          <ChevronDown
-                            className={`size-4 shrink-0 text-white/75 transition-transform duration-200 ${
-                              isExpanded ? 'rotate-180' : ''
-                            }`}
-                          />
-                        </button>
+                        </div>
+                        ) : null}
 
-                        {/* Section Lessons List */}
-                        {isExpanded && (
+                        {/* Lessons are always listed: no dropdown to open */}
+                        {(
                           <div className="divide-y divide-white/5 bg-[#100d18]">
                             {section.lessons.map((lesson) => {
                               const isActive = activeLessonId === lesson.id;
