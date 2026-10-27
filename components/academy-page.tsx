@@ -376,12 +376,13 @@ export function AcademyPage({
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.84fr)] lg:px-8 lg:py-16">
           <div>
             <h1 className="max-w-4xl text-4xl font-bold leading-[1.06] text-[#171321] sm:text-5xl lg:text-6xl">
-              Learn medical device compliance from real-world experts
+              The medical device academy: learn compliance from real-world experts
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#5f5872] sm:text-lg">
-              Add a modern course academy to easymedicaldevice.com with
-              practical training for MDR, IVDR, ISO 13485, SaMD, risk
-              management, and market access.
+              Easy Medical Device Academy offers online medical device courses with
+              practical training for EU MDR, IVDR, ISO 13485, SaMD, risk
+              management, and market access, taught by working regulatory
+              experts, with a verifiable certificate.
             </p>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">

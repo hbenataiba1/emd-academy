@@ -7,10 +7,26 @@ import { ACADEMY_URL, SITE_URL } from '@/lib/site';
 import { getPublishedCoursesFromSupabase } from '@/lib/supabase';
 
 export const metadata: Metadata = {
-  title: 'Medical Device Compliance Courses | Easy Medical Device Academy',
+  title: 'Medical Device Academy | Online MDR, IVDR & ISO 13485 Courses',
   description:
-    'Online medical device compliance courses for MDR, IVDR, ISO 13485, SaMD, risk management, and market access.',
+    'Easy Medical Device Academy: online medical device courses on EU MDR, IVDR, ISO 13485, SaMD, risk management and market access, taught by experts, with a verifiable certificate.',
+  keywords: [
+    'medical device academy',
+    'medical device courses',
+    'medical device training',
+    'MDR training',
+    'IVDR training',
+    'ISO 13485 course',
+    'medical device regulatory affairs course',
+  ],
   alternates: { canonical: '/academy' },
+  openGraph: {
+    title: 'Medical Device Academy | Online MDR, IVDR & ISO 13485 Courses',
+    description:
+      'Online medical device courses and certificates from Easy Medical Device Academy.',
+    url: '/academy',
+    type: 'website',
+  },
 };
 
 export default async function AcademyRoute() {
@@ -29,8 +45,24 @@ export default async function AcademyRoute() {
             {
               '@type': 'EducationalOrganization',
               name: 'Easy Medical Device Academy',
+              alternateName: 'Medical Device Academy',
               url: ACADEMY_URL,
+              description:
+                'Online medical device courses on EU MDR, IVDR, ISO 13485, SaMD, risk management and market access.',
               parentOrganization: { '@type': 'Organization', name: 'Easy Medical Device', url: SITE_URL },
+            },
+            {
+              '@type': 'WebSite',
+              name: 'Easy Medical Device Academy',
+              alternateName: 'Medical Device Academy',
+              url: ACADEMY_URL,
+            },
+            {
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'Easy Medical Device', item: SITE_URL },
+                { '@type': 'ListItem', position: 2, name: 'Academy', item: ACADEMY_URL },
+              ],
             },
             {
               '@type': 'ItemList',
