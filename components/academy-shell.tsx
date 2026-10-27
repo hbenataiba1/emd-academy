@@ -14,15 +14,15 @@ import {
   GraduationCap,
   Receipt,
   Trophy,
+  FlaskConical,
   Laptop,
-  ListChecks,
   LogOut,
   Menu,
+  Map as MapIcon,
   Mic,
   Microscope,
   Network,
   Newspaper,
-  Scale,
   ShieldCheck,
   Stethoscope,
   User,
@@ -67,97 +67,34 @@ const aboutMenuItems: MegaMenuItem[] = [
   { title: "Our Team", description: "Meet experts dedicated to guiding your products safely to market.", href: "https://easymedicaldevice.com/team/", icon: Users },
 ];
 
-type ServiceGroup = {
-  title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  links: { label: string; href: string }[];
-};
-
 const SITE = "https://easymedicaldevice.com";
 
-// Two columns, same layout as easymedicaldevice.com
-const servicesMenuColumns: ServiceGroup[][] = [
-  [
-    {
-      title: "Regulatory Consulting",
-      icon: Scale,
-      links: [
-        { label: "Global Market Access", href: `${SITE}/services/medical-device-market-access/` },
-        { label: "IVDR Consulting", href: `${SITE}/services/medical-device-ivdr-consulting/` },
-        { label: "EU MDR Consulting", href: `${SITE}/services/medical-device-eu-mdr-consulting/` },
-        { label: "FDA Consulting", href: `${SITE}/services/fda-medical-device-consulting/` },
-        { label: "Authorized Representative", href: `${SITE}/services/medical-device-authorized-representative/` },
-      ],
-    },
-    {
-      title: "Quality Consulting",
-      icon: ShieldCheck,
-      links: [
-        { label: "ISO 13485 Consulting", href: `${SITE}/services/medical-device-iso-13485-consulting/` },
-        { label: "Audit & Inspection Readiness", href: `${SITE}/services/medical-device-audit-services/` },
-        { label: "Quality & Risk Management Systems", href: `${SITE}/services/medical-device-risk-management/` },
-        { label: "Regulatory Updates", href: `${SITE}/services/medical-device-regulatory-updates/` },
-      ],
-    },
-    {
-      title: "Verification & Validation",
-      icon: ListChecks,
-      links: [
-        { label: "Biocompatibility Testing", href: `${SITE}/services/medical-device-biocompatibility-testing/` },
-        { label: "Packaging & Labeling Compliance", href: `${SITE}/services/medical-device-packaging-and-labeling/` },
-        { label: "Electromagnetic Compatibility", href: `${SITE}/services/medical-device-emc-testing/` },
-        { label: "Usability testing", href: `${SITE}/services/medical-device-usability-testing/` },
-        { label: "Cybersecurity", href: `${SITE}/services/medical-device-cybersecurity/` },
-      ],
-    },
-    {
-      title: "Additional Team",
-      icon: Users,
-      links: [
-        { label: "Additional Regulatory Team", href: `${SITE}/services/additional-regulatory-team/` },
-        { label: "Additional Quality Team", href: `${SITE}/services/additional-quality-team/` },
-        { label: "PRRC Services", href: `${SITE}/services/prrc-services/` },
-      ],
-    },
-  ],
-  [
-    {
-      title: "Design & Development",
-      icon: Code2,
-      links: [
-        { label: "Medical Device Software Development", href: `${SITE}/services/medical-device-software-development/` },
-      ],
-    },
-    {
-      title: "Business Setup & Corporate Services",
-      icon: Building2,
-      links: [
-        { label: "Company Registration", href: `${SITE}/services/medical-device-manufacturer-registration/` },
-        { label: "Bank Account Opening", href: `${SITE}/services/business-bank-account-opening/` },
-      ],
-    },
-    {
-      title: "Platforms",
-      icon: Laptop,
-      links: [
-        { label: "EasyIFU", href: `${SITE}/easyifu/` },
-        { label: "SmartEye – eQMS", href: `${SITE}/smarteye-eqms/` },
-      ],
-    },
-  ],
+// Same menu as easymedicaldevice.com: six services (two columns) and the platforms panel.
+const servicesMenuItems: MegaMenuItem[] = [
+  { title: "Market Access & Regulatory Consulting", description: "Enter international medical device markets with a clear regulatory strategy and expert guidance.", href: `${SITE}/services/market-access-regulatory-consulting/`, icon: MapIcon },
+  { title: "Quality Management & Compliance", description: "Strengthen your QMS, meet regulatory requirements, and prepare for audits.", href: `${SITE}/services/quality-management-compliance/`, icon: ShieldCheck },
+  { title: "Testing & Validation", description: "Demonstrate your device’s safety, performance, and compliance through appropriate testing and validation.", href: `${SITE}/services/medical-device-testing-validation/`, icon: FlaskConical },
+  { title: "External Regulatory & Quality Support", description: "Expand your regulatory and quality capabilities without increasing your internal headcount.", href: `${SITE}/services/external-regulatory-quality-teams/`, icon: Users },
+  { title: "Medical Device Development", description: "Develop reliable medical device software designed around your users and regulatory requirements.", href: `${SITE}/services/medical-device-software-development/`, icon: Code2 },
+  { title: "Business Setup & Corporate Services", description: "Establish your business in new markets with company registration and banking assistance.", href: `${SITE}/services/business-setup-corporate-services/`, icon: Building2 },
+];
+
+const servicesPlatforms = [
+  { name: "EasyIFU", label: "Easy IFU", description: "Control your IFUs digitally while maintaining compliance, traceability, and version accuracy.", href: `${SITE}/easyifu/`, color: "#0b1f4b" },
+  { name: "SmartEye – eQMS", label: "SmartEye", description: "Manage quality digitally, reduce risk, and stay continuously audit-ready.", href: `${SITE}/smarteye-eqms/`, color: "#0f7f8c" },
 ];
 
 type MainMenuItem = {
   label: string;
   href: string;
   megaMenu?: MegaMenuItem[];
-  serviceColumns?: ServiceGroup[][];
+  servicesPanel?: boolean;
   width?: string;
   gridCols?: string;
 };
 
 const mainSiteMenu: MainMenuItem[] = [
-  { label: "Services", href: "https://easymedicaldevice.com/services/", serviceColumns: servicesMenuColumns, width: "w-[960px]" },
+  { label: "Services", href: "https://easymedicaldevice.com/services/", servicesPanel: true, width: "w-[1000px]" },
   { label: "Expertise", href: "https://easymedicaldevice.com/expertise/", megaMenu: expertiseMenuItems, width: "w-[700px]", gridCols: "grid-cols-2" },
   { label: "Learn", href: "https://easymedicaldevice.com/blog/", megaMenu: learnMenuItems, width: "w-[750px]", gridCols: "grid-cols-2" },
   { label: "About", href: "https://easymedicaldevice.com/about/", megaMenu: aboutMenuItems, width: "w-[390px]", gridCols: "grid-cols-1" },
@@ -184,7 +121,6 @@ function MobileMenu({
   onSignOut: () => void;
 }) {
   const [section, setSection] = useState<string | null>(null);
-  const [openGroups, setOpenGroups] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -301,7 +237,7 @@ function MobileMenu({
           {/* Main site */}
           <p className={sectionTitle}>Easy Medical Device</p>
           {mainSiteMenu.map((item) => {
-            const expandable = Boolean(item.megaMenu || item.serviceColumns);
+            const expandable = Boolean(item.megaMenu || item.servicesPanel);
             const isOpen = section === item.label;
 
             if (!expandable) {
@@ -324,42 +260,22 @@ function MobileMenu({
                   <ChevronDown className={`size-4 transition-transform ${isOpen ? "rotate-180" : ""}`} aria-hidden="true" />
                 </button>
 
-                {isOpen && item.serviceColumns ? (
-                  <div className="mb-2 space-y-1 border-l-2 border-[#ede8fb] pl-3 ml-4">
-                    {item.serviceColumns.flat().map((group) => {
-                      const GroupIcon = group.icon;
-                      const groupOpen = openGroups.includes(group.title);
+                {isOpen && item.servicesPanel ? (
+                  <div className="mb-2 ml-4 space-y-0.5 border-l-2 border-[#ede8fb] pl-3">
+                    {servicesMenuItems.map((sub) => {
+                      const SubIcon = sub.icon;
                       return (
-                        <div key={group.title}>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setOpenGroups((prev) =>
-                                prev.includes(group.title) ? prev.filter((t) => t !== group.title) : [...prev, group.title],
-                              )
-                            }
-                            aria-expanded={groupOpen}
-                            className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2.5 text-left text-sm font-bold text-[#191625] hover:bg-[#f8f6ff]"
-                          >
-                            <span className="flex items-center gap-2.5">
-                              <GroupIcon className="size-4 text-[#7c3aed]" /> {group.title}
-                            </span>
-                            <ChevronDown className={`size-4 transition-transform ${groupOpen ? "rotate-180" : ""}`} aria-hidden="true" />
-                          </button>
-                          {groupOpen ? (
-                            <ul className="mb-1 space-y-0.5 pl-9">
-                              {group.links.map((link) => (
-                                <li key={link.href}>
-                                  <a href={link.href} className="block rounded-md py-1.5 text-sm text-[#3b3650] underline-offset-2 hover:text-[#7c3aed] hover:underline">
-                                    {link.label}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : null}
-                        </div>
+                        <a key={sub.title} href={sub.href} className="flex items-center gap-2.5 rounded-lg px-2 py-2.5 text-sm font-semibold text-[#302945] hover:bg-[#f8f6ff]">
+                          <SubIcon className="size-4 shrink-0 text-[#7c3aed]" /> {sub.title}
+                        </a>
                       );
                     })}
+                    <p className="px-2 pt-3 text-xs font-bold uppercase tracking-wide text-[#6b6580]">Platforms</p>
+                    {servicesPlatforms.map((p) => (
+                      <a key={p.name} href={p.href} className="block rounded-lg px-2 py-2.5 text-sm font-semibold text-[#302945] hover:bg-[#f8f6ff]">
+                        {p.name}
+                      </a>
+                    ))}
                   </div>
                 ) : null}
 
@@ -419,7 +335,6 @@ export function AcademyHeader({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [session, setSession] = useState<AcademySession | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [openServiceGroups, setOpenServiceGroups] = useState<string[]>([]);
   const menuTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileRef = useRef<HTMLDivElement | null>(null);
 
@@ -461,10 +376,6 @@ export function AcademyHeader({
     .toUpperCase()
     .slice(0, 2) || "U";
 
-  const toggleServiceGroup = (title: string) =>
-    setOpenServiceGroups((prev) =>
-      prev.includes(title) ? prev.filter((item) => item !== title) : [...prev, title],
-    );
 
   const handleMouseEnter = (label: string) => {
     if (menuTimeoutRef.current) clearTimeout(menuTimeoutRef.current);
@@ -490,16 +401,16 @@ export function AcademyHeader({
             <div
               key={item.label}
               className="relative flex items-center h-14"
-              onMouseEnter={() => (item.megaMenu || item.serviceColumns) ? handleMouseEnter(item.label) : setActiveMegaMenu(null)}
+              onMouseEnter={() => (item.megaMenu || item.servicesPanel) ? handleMouseEnter(item.label) : setActiveMegaMenu(null)}
               onMouseLeave={handleMouseLeave}
             >
               <a
                 href={item.href}
                 className={`relative inline-flex h-11 items-center gap-1.5 rounded-lg px-2 text-[17px] font-medium transition ${activeMegaMenu === item.label ? "text-[#6b34e9]" : "text-black hover:text-[#6b34e9]"}`}
-                onClick={(e) => { if (item.megaMenu || item.serviceColumns) setActiveMegaMenu((prev) => prev === item.label ? null : item.label); }}
+                onClick={(e) => { if (item.megaMenu || item.servicesPanel) setActiveMegaMenu((prev) => prev === item.label ? null : item.label); }}
               >
                 <span>{item.label}</span>
-                {(item.megaMenu || item.serviceColumns) && (
+                {(item.megaMenu || item.servicesPanel) && (
                   <ChevronDown className={`size-4 stroke-[2.2] transition-transform duration-200 ${activeMegaMenu === item.label ? "rotate-180 text-[#6b34e9]" : ""}`} aria-hidden="true" />
                 )}
                 {activeMegaMenu === item.label && (
@@ -507,52 +418,43 @@ export function AcademyHeader({
                 )}
               </a>
 
-              {item.serviceColumns && activeMegaMenu === item.label && (
+              {item.servicesPanel && activeMegaMenu === item.label && (
                 <div
-                  className={`absolute left-0 top-[calc(100%+2px)] z-50 max-h-[80vh] overflow-y-auto rounded-3xl border border-[#ded6f3] bg-white p-8 shadow-[0_20px_60px_rgba(25,22,37,0.16)] ${item.width}`}
+                  className={`absolute left-0 top-[calc(100%+2px)] z-50 max-h-[80vh] max-w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-[#ded6f3] bg-white shadow-[0_20px_60px_rgba(25,22,37,0.16)] ${item.width}`}
                   onMouseEnter={() => handleMouseEnter(item.label)}
                   onMouseLeave={handleMouseLeave}
                 >
-                  <div className="grid grid-cols-2 gap-x-12">
-                    {item.serviceColumns.map((column, columnIndex) => (
-                      <div key={columnIndex} className="space-y-7">
-                        {column.map((group) => {
-                          const GroupIcon = group.icon;
+                  <div className="grid grid-cols-[1fr_300px]">
+                    <div className="p-8">
+                      <p className="mb-6 text-[15px] font-bold text-[#191625]">What we do</p>
+                      <div className="grid grid-cols-2 gap-x-10 gap-y-7">
+                        {servicesMenuItems.map((sub) => {
+                          const Icon = sub.icon;
                           return (
-                            <div key={group.title}>
-                              <button
-                                type="button"
-                                onClick={() => toggleServiceGroup(group.title)}
-                                aria-expanded={openServiceGroups.includes(group.title)}
-                                className="group flex w-full items-center justify-between gap-3 text-left"
-                              >
-                                <span className="flex items-center gap-3">
-                                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[#191625] text-[#191625] transition group-hover:border-[#6b34e9] group-hover:text-[#6b34e9]">
-                                    <GroupIcon className="size-[18px] stroke-[1.8]" />
-                                  </span>
-                                  <span className="text-[15px] font-bold leading-tight text-[#191625] transition group-hover:text-[#6b34e9]">{group.title}</span>
-                                </span>
-                                <ChevronDown
-                                  className={`size-4 shrink-0 text-[#191625] transition-transform duration-200 ${openServiceGroups.includes(group.title) ? "rotate-180" : ""}`}
-                                  aria-hidden="true"
-                                />
-                              </button>
-                              {openServiceGroups.includes(group.title) ? (
-                                <ul className="mt-3 list-[circle] space-y-1.5 pl-[3.25rem] marker:text-[#514b63]">
-                                  {group.links.map((link) => (
-                                    <li key={link.href} className="text-[15px] leading-6 text-[#3b3650]">
-                                      <a href={link.href} className="underline decoration-[#8b849a] underline-offset-2 transition hover:text-[#6b34e9] hover:decoration-[#6b34e9]">
-                                        {link.label}
-                                      </a>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                            </div>
+                            <a key={sub.title} href={sub.href} className="group flex items-start gap-3">
+                              <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[#191625] bg-[#f1f1f1] text-[#191625] transition group-hover:border-[#6b34e9] group-hover:text-[#6b34e9]">
+                                <Icon className="size-[18px] stroke-[1.8]" />
+                              </span>
+                              <span>
+                                <span className="block text-[15px] font-medium leading-tight text-[#191625] transition group-hover:text-[#6b34e9]">{sub.title}</span>
+                                <span className="mt-1.5 block text-[15px] leading-7 text-[#3b3650]">{sub.description}</span>
+                              </span>
+                            </a>
                           );
                         })}
                       </div>
-                    ))}
+                    </div>
+                    <div className="border-l border-[#ece8f5] bg-[#f8f7fb] p-8">
+                      <p className="mb-6 text-[15px] font-bold text-[#191625]">Platforms</p>
+                      <div className="space-y-8">
+                        {servicesPlatforms.map((p) => (
+                          <a key={p.name} href={p.href} className="group block">
+                            <span className="block text-3xl font-extrabold tracking-tight" style={{ color: p.color }}>{p.label}</span>
+                            <span className="mt-3 block text-[15px] leading-7 text-[#3b3650] transition group-hover:text-[#6b34e9]">{p.description}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -818,27 +720,12 @@ const footerColumns: {
     {
       title: "Services",
       links: [
-        { label: "Market Access", href: `${MAIN_SITE}/services/market-access/` },
-        {
-          label: "MDR & IVDR Technical Documentation",
-          href: `${MAIN_SITE}/services/mdr-ivdr-technical-documentation/`,
-        },
-        {
-          label: "Quality & Risk Management Systems",
-          href: `${MAIN_SITE}/services/quality-risk-management-systems/`,
-        },
-        {
-          label: "Software & Digital Health Compliance",
-          href: `${MAIN_SITE}/services/software-digital-health-compliance/`,
-        },
-        {
-          label: "Packaging & Labeling Compliance",
-          href: `${MAIN_SITE}/services/packaging-labeling-compliance/`,
-        },
-        {
-          label: "Audit & Inspection Readiness",
-          href: `${MAIN_SITE}/services/audit-inspection-readiness/`,
-        },
+        { label: "Market Access & Regulatory Consulting", href: `${MAIN_SITE}/services/market-access-regulatory-consulting/` },
+        { label: "Quality Management & Compliance", href: `${MAIN_SITE}/services/quality-management-compliance/` },
+        { label: "Testing & Validation", href: `${MAIN_SITE}/services/medical-device-testing-validation/` },
+        { label: "External Regulatory & Quality Teams", href: `${MAIN_SITE}/services/external-regulatory-quality-teams/` },
+        { label: "Medical Device Development", href: `${MAIN_SITE}/services/medical-device-software-development/` },
+        { label: "Business Setup & Corporate Services", href: `${MAIN_SITE}/services/business-setup-corporate-services/` },
       ],
     },
   ],
@@ -869,6 +756,7 @@ const footerColumns: {
       links: [
         { label: "Blog", href: `${MAIN_SITE}/blog/` },
         { label: "Magazines", href: `${MAIN_SITE}/emd-mag/` },
+        { label: "Academy", href: "/academy" },
       ],
     },
     {
