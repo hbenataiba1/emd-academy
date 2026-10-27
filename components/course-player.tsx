@@ -1792,6 +1792,7 @@ export function CoursePlayer({
                       }}
                       onEnded={() => {
                         setIsPlaying(false);
+                        markLessonCompleted(activeLesson);
                         handleNextLesson();
                       }}
                       onClick={() => setIsPlaying(!isPlaying)}
