@@ -281,3 +281,272 @@ export function surveyRequestEmail({ name, courseTitle, courseId }: CourseEmail)
     text: lines([`Hi ${first},`, '', `How was ${courseTitle}? Rate it in 30 seconds:`, href]),
   };
 }
+
+function quote(value: string) {
+  return `<div style="margin:0 0 16px;padding:12px 16px;border-left:4px solid #c4b5fd;background:#faf8ff;border-radius:0 10px 10px 0;font-size:14px;line-height:1.6;color:#3b3650;white-space:pre-line;">${escapeHtml(value)}</div>`;
+}
+
+function shorten(value: string, max: number) {
+  const text = (value || '').trim();
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+/** A team member answered a question the learner asked under a lesson. */
+export function questionAnsweredEmail({
+  name,
+  courseTitle,
+  courseId,
+  lessonTitle,
+  question,
+  answer,
+  answeredBy,
+}: CourseEmail & { lessonTitle: string; question: string; answer: string; answeredBy: string }): Built {
+  const first = firstNameOf(name);
+  const href = courseUrl(courseId);
+  const html = layout({
+    preview: `${answeredBy} answered your question.`,
+    eyebrow: 'Your question was answered',
+    title: 'You have an answer',
+    content:
+      paragraph(
+        `Hi ${escapeHtml(first)}, ${escapeHtml(answeredBy)} answered your question on <strong>${escapeHtml(lessonTitle)}</strong> in <strong>${escapeHtml(courseTitle)}</strong>.`,
+      ) +
+      `<p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6e687d;">Your question</p>` +
+      quote(shorten(question, 400)) +
+      `<p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6e687d;">${escapeHtml(answeredBy)}'s answer</p>` +
+      quote(shorten(answer, 1500)),
+    cta: { label: 'Open the course', href },
+  });
+  return {
+    subject: `${answeredBy} answered your question`,
+    html,
+    text: lines([
+      `Hi ${first},`,
+      '',
+      `${answeredBy} answered your question on "${lessonTitle}" (${courseTitle}).`,
+      '',
+      `Your question: ${shorten(question, 400)}`,
+      '',
+      `Answer: ${shorten(answer, 1500)}`,
+      '',
+      href,
+    ]),
+  };
+}
+
+/** The application was received: the team will review it. */
+export function instructorApplicationEmail({ name }: { name: string }): Built {
+  const first = firstNameOf(name);
+  const href = `${SITE}/academy/instructor/apply`;
+  const html = layout({
+    preview: 'We received your application to teach on the Academy.',
+    eyebrow: 'Instructor application',
+    title: 'We received your application',
+    content:
+      paragraph(`Hi ${escapeHtml(first)}, thank you for applying to teach on Easy Medical Device Academy.`) +
+      paragraph(
+        'Our team will review your background and your LinkedIn profile. We will email you as soon as we have made a decision. You can check the status of your application at any time.',
+      ),
+    cta: { label: 'View my application', href },
+  });
+  return {
+    subject: 'We received your instructor application',
+    html,
+    text: lines([`Hi ${first},`, '', 'Thank you for applying to teach on Easy Medical Device Academy. We will review your application and email you soon.', href]),
+  };
+}
+
+/** The application was approved: the instructor dashboard is open. */
+export function instructorApprovedEmail({ name, note }: { name: string; note?: string | null }): Built {
+  const first = firstNameOf(name);
+  const href = `${SITE}/academy/instructor`;
+  const html = layout({
+    preview: 'Your application was approved. Your instructor dashboard is ready.',
+    eyebrow: 'Application approved',
+    title: 'Welcome to the faculty',
+    content:
+      paragraph(`Hi ${escapeHtml(first)}, great news: your application was approved. You can now teach on Easy Medical Device Academy.`) +
+      (note ? paragraph(`<em>${escapeHtml(note)}</em>`) : '') +
+      paragraph('Open your instructor dashboard to get started.'),
+    cta: { label: 'Open my instructor dashboard', href },
+  });
+  return {
+    subject: 'Your instructor application was approved',
+    html,
+    text: lines([`Hi ${first},`, '', 'Your application was approved. Open your instructor dashboard:', href, ...(note ? ['', note] : [])]),
+  };
+}
+
+/** The application was declined, with the reason written by the team. */
+export function instructorRejectedEmail({ name, note }: { name: string; note?: string | null }): Built {
+  const first = firstNameOf(name);
+  const href = `${SITE}/academy/instructor/apply`;
+  const html = layout({
+    preview: 'An update on your instructor application.',
+    eyebrow: 'Application update',
+    title: 'About your application',
+    content:
+      paragraph(
+        `Hi ${escapeHtml(first)}, thank you for your interest in teaching on Easy Medical Device Academy. After reviewing your application, we are not able to approve it at this time.`,
+      ) +
+      (note ? paragraph(`<strong>Note from the team:</strong><br>${escapeHtml(note)}`) : '') +
+      paragraph('You are welcome to update your application and send it again.'),
+    cta: { label: 'Update my application', href },
+  });
+  return {
+    subject: 'An update on your instructor application',
+    html,
+    text: lines([`Hi ${first},`, '', 'We are not able to approve your application at this time.', ...(note ? ['', `Note: ${note}`] : []), '', href]),
+  };
+}
+
+/** The team asks the instructor to change their course before it can go online. */
+export function courseChangesRequestedEmail({
+  name,
+  courseTitle,
+  courseId,
+  note,
+}: {
+  name: string;
+  courseTitle: string;
+  courseId: string;
+  note: string;
+}): Built {
+  const first = firstNameOf(name);
+  const href = `${SITE}/academy/instructor/courses/${encodeURIComponent(courseId)}`;
+  const html = layout({
+    preview: `Changes requested on ${courseTitle}.`,
+    eyebrow: 'Course review',
+    title: 'A few changes are needed',
+    content:
+      paragraph(
+        `Hi ${escapeHtml(first)}, we reviewed <strong>${escapeHtml(courseTitle)}</strong>. Thank you for your work: before we can publish it, we need you to change the following.`,
+      ) +
+      quote(note) +
+      paragraph('Update your course and send it for review again when you are ready.'),
+    cta: { label: 'Edit my course', href },
+  });
+  return {
+    subject: `Changes needed on "${courseTitle}"`,
+    html,
+    text: lines([`Hi ${first},`, '', `We reviewed "${courseTitle}". Before we can publish it:`, '', note, '', href]),
+  };
+}
+
+/** The course is online. */
+export function coursePublishedEmail({
+  name,
+  courseTitle,
+  courseId,
+}: {
+  name: string;
+  courseTitle: string;
+  courseId: string;
+}): Built {
+  const first = firstNameOf(name);
+  const href = `${SITE}/academy/course/${encodeURIComponent(courseId)}`;
+  const html = layout({
+    preview: `${courseTitle} is now online.`,
+    eyebrow: 'Course published',
+    title: 'Your course is online',
+    content:
+      paragraph(
+        `Hi ${escapeHtml(first)}, great news: <strong>${escapeHtml(courseTitle)}</strong> is now published on Easy Medical Device Academy. Learners can find it and enroll.`,
+      ) + paragraph('Share the link with your network to welcome your first learners.'),
+    cta: { label: 'See my course', href },
+  });
+  return {
+    subject: `"${courseTitle}" is now online`,
+    html,
+    text: lines([`Hi ${first},`, '', `"${courseTitle}" is now published. See it here:`, href]),
+  };
+}
+
+/** A payment was sent to the instructor. */
+export function instructorPayoutEmail({
+  name,
+  amountCents,
+  currency,
+  method,
+  reference,
+}: {
+  name: string;
+  amountCents: number;
+  currency: string;
+  method: string;
+  reference?: string | null;
+}): Built {
+  const first = firstNameOf(name);
+  const amount = formatEmailMoney(amountCents, currency);
+  const href = `${SITE}/academy/instructor/earnings`;
+  const html = layout({
+    preview: `We sent you ${amount}.`,
+    eyebrow: 'Payment sent',
+    title: `We sent you ${amount}`,
+    content:
+      paragraph(`Hi ${escapeHtml(first)}, we just sent you the earnings from your courses.`) +
+      detailsTable([
+        ['Amount', amount],
+        ['Method', method],
+        ...(reference ? ([['Reference', reference]] as Array<[string, string]>) : []),
+      ]) +
+      paragraph('You can see every sale and payment in the Earnings page of your dashboard.'),
+    cta: { label: 'See my earnings', href },
+  });
+  return {
+    subject: `We sent you ${amount}`,
+    html,
+    text: lines([`Hi ${first},`, '', `We sent you ${amount} (${method}${reference ? `, ref. ${reference}` : ''}).`, '', href]),
+  };
+}
+
+/** A gentle reminder: questions of learners that are still waiting for the instructor. */
+export function instructorQuestionReminderEmail({
+  name,
+  total,
+  items,
+}: {
+  name: string;
+  total: number;
+  items: { courseTitle: string; lessonTitle: string; question: string; waitingDays: number }[];
+}): Built {
+  const first = firstNameOf(name);
+  const href = `${SITE}/academy/instructor/questions`;
+  const shown = items.slice(0, 5);
+  const list = shown
+    .map(
+      (item) =>
+        `<div style="margin:0 0 14px;">
+          <p style="margin:0 0 4px;font-size:12px;color:#6e687d;">${escapeHtml(item.courseTitle)} · ${escapeHtml(item.lessonTitle)} · waiting ${item.waitingDays} days</p>
+          ${quote(shorten(item.question, 200))}
+        </div>`,
+    )
+    .join('');
+
+  const html = layout({
+    preview: `${total} learner question${total === 1 ? '' : 's'} could use your answer.`,
+    eyebrow: 'A small reminder',
+    title: total === 1 ? 'A learner is waiting for you' : `${total} learners are waiting for you`,
+    content:
+      paragraph(
+        `Hi ${escapeHtml(first)}, ${total === 1 ? 'one question' : `${total} questions`} on your lessons ${total === 1 ? 'has' : 'have'} not been answered yet. Whenever you have a few minutes, a short answer means a lot to your learners.`,
+      ) +
+      list +
+      (total > shown.length ? paragraph(`And ${total - shown.length} more in your dashboard.`) : '') +
+      `<p style="margin:16px 0 0;font-size:13px;color:#8e879f;">We only send this reminder from time to time, never more than once every few days.</p>`,
+    cta: { label: 'Answer my learners', href },
+  });
+
+  return {
+    subject: total === 1 ? 'A learner is waiting for your answer' : `${total} learners are waiting for your answers`,
+    html,
+    text: lines([
+      `Hi ${first},`,
+      '',
+      `${total} question${total === 1 ? '' : 's'} on your lessons ${total === 1 ? 'is' : 'are'} still waiting for an answer.`,
+      ...shown.map((item) => `- ${item.courseTitle} / ${item.lessonTitle}: ${shorten(item.question, 120)}`),
+      '',
+      href,
+    ]),
+  };
+}

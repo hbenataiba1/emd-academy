@@ -86,6 +86,7 @@ export async function GET(request: Request) {
           studentCount: courseData?.learner_count || 0,
           lastUpdated: '2026',
           totalDuration: formatMinutes(totalMinutes) || '—',
+          presentationUrl: courseData?.presentation_url || undefined,
           sections,
         };
 

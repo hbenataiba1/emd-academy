@@ -25,6 +25,7 @@ import {
   type AcademySession,
   updateAcademyProfile,
 } from '@/lib/academy-session';
+import { uploadAcademyAvatar } from '@/lib/academy-avatar-upload';
 
 export function AcademyProfilePage() {
   const [session, setSession] = useState<AcademySession | null | undefined>(undefined);
@@ -56,14 +57,14 @@ export function AcademyProfilePage() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setAvatarUrl(reader.result);
-        setFeedback(null);
-      }
-    };
-    reader.readAsDataURL(file);
+    setFeedback(null);
+    setPending(true);
+    uploadAcademyAvatar(file)
+      .then((url) => setAvatarUrl(url))
+      .catch((error) =>
+        setFeedback({ kind: 'error', message: error instanceof Error ? error.message : 'The picture could not be uploaded.' }),
+      )
+      .finally(() => setPending(false));
   };
 
   const handleSaveProfile = async (e: FormEvent) => {

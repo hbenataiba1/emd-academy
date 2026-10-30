@@ -1,6 +1,7 @@
 import { after } from 'next/server';
 
 import { academyRestFetch, saveAcademyEnrollment } from '@/lib/academy-auth';
+import { recordInstructorEarning } from '@/lib/academy-earnings';
 import { notifyPurchase } from '@/lib/academy-notify';
 import { markRedemptionRedeemed } from '@/lib/academy-coupons';
 
@@ -74,6 +75,17 @@ export async function completeCheckoutSession(session: StripeCheckoutSession) {
     }),
     prefer: 'resolution=merge-duplicates,return=minimal',
     useServiceRole: true,
+  });
+
+  // When the course belongs to an instructor, the sale becomes their earning (once per checkout).
+  await recordInstructorEarning({
+    sessionId: session.id,
+    paymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : null,
+    userId,
+    learnerEmail,
+    courseId,
+    amountCents,
+    currency,
   });
 
   // The webhook and the instant check can both run this: the email goes out once.

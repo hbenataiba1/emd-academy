@@ -1,6 +1,7 @@
 import { after } from 'next/server';
 
 import { cleanEnv, json } from '@/lib/academy-auth';
+import { recordInstructorRefund } from '@/lib/academy-earnings';
 import { notifyAbandonedCheckout, notifyPaymentFailed } from '@/lib/academy-notify';
 import {
   completeCheckoutSession,
@@ -60,6 +61,16 @@ export async function POST(request: Request) {
     const intent = event.data?.object as unknown as StripePaymentIntent | undefined;
     if (intent?.metadata?.user_id && intent.metadata.course_id) {
       after(() => notifyPaymentFailed(intent));
+    }
+  }
+
+  // A refund: the instructor's part of it is taken back from what they are owed.
+  if (event.type === 'charge.refunded') {
+    const charge = event.data?.object as unknown as
+      | { payment_intent?: string | null; amount_refunded?: number }
+      | undefined;
+    if (charge?.payment_intent && charge.amount_refunded) {
+      await recordInstructorRefund(charge.payment_intent, charge.amount_refunded);
     }
   }
 

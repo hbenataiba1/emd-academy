@@ -57,6 +57,7 @@ import {
 import { useCertificatePreviewUrl } from '@/lib/use-certificate-preview';
 import { ArticleBody } from '@/components/article-body';
 import { getVideoEmbedUrl, isVideoEmbedUrl } from '@/lib/video-embed';
+import { LessonComments } from '@/components/lesson-comments';
 import { CourseSurvey } from '@/components/course-survey';
 import { ExamCelebration } from '@/components/exam-celebration';
 import { LessonPromoCard } from '@/components/lesson-promo-card';
@@ -161,6 +162,21 @@ function parseQuizMeta(description?: string): QuizMeta {
   } catch {
     return fallback;
   }
+}
+
+/** How to show a presentation inside the page (PDF, PowerPoint or Google Slides). */
+function getPresentationEmbed(url: string): { url: string; embedUrl: string | null } {
+  const slides = url.match(/docs\.google\.com\/presentation\/d\/([A-Za-z0-9_-]+)/);
+  if (slides) {
+    return { url, embedUrl: `https://docs.google.com/presentation/d/${slides[1]}/embed` };
+  }
+  if (/\.pdf(\?|#|$)/i.test(url)) {
+    return { url, embedUrl: `${url.split('#')[0]}#toolbar=0&navpanes=0` };
+  }
+  if (/\.pptx?(\?|#|$)/i.test(url)) {
+    return { url, embedUrl: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}` };
+  }
+  return { url, embedUrl: null };
 }
 
 function parseQuizQuestions(lesson?: CourseLesson): QuizQuestion[] {
@@ -281,10 +297,17 @@ export function CoursePlayer({
   const visibleResources = useMemo(
     () =>
       (activeLesson?.resources || []).filter(
-        (resource) => resource.type !== 'quiz_question' && resource.type !== 'promo',
+        (resource) =>
+          resource.type !== 'quiz_question' && resource.type !== 'promo' && resource.type !== 'presentation',
       ),
     [activeLesson],
   );
+  // The slides of the lesson, shown in their own tab next to the video.
+  const presentation = useMemo(
+    () => (curriculum.presentationUrl ? getPresentationEmbed(curriculum.presentationUrl) : null),
+    [curriculum.presentationUrl],
+  );
+
   const articleHtml = useMemo(
     () =>
       activeLesson?.type === 'article' && activeLesson.description
@@ -422,7 +445,11 @@ export function CoursePlayer({
   const [volume, setVolume] = useState<number>(0.85);
   const [isMuted, setIsMuted] = useState(false);
   const [showCaptions, setShowCaptions] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'qa' | 'notes' | 'announcements' | 'reviews' | 'resources'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'presentation' | 'qa' | 'notes' | 'announcements' | 'reviews' | 'resources'>('overview');
+  // A lesson without slides has no Presentation tab.
+  useEffect(() => {
+    if (activeTab === 'presentation' && !presentation) setActiveTab('overview');
+  }, [activeTab, presentation]);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string[]>>({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [currentQuizQuestionIndex, setCurrentQuizQuestionIndex] = useState(0);
@@ -680,7 +707,9 @@ export function CoursePlayer({
       const completedIds = new Set(storedProgress.completedLessonIds);
       setCompletedLessonIds((prev) => {
         const next = new Set(prev);
-        storedProgress.completedLessonIds.forEach((lessonId) => next.add(lessonId));
+        storedProgress.completedLessonIds.forEach((lessonId) => {
+          if (allLessons.find((lesson) => lesson.id === lessonId)?.type !== 'quiz') next.add(lessonId);
+        });
         return next;
       });
       const resumeLesson =
@@ -795,7 +824,12 @@ export function CoursePlayer({
           const mergedLessons = new Set(
             profileResponse.ok
               ? savedLessons
-              : [...savedLessons, ...(storedProgress?.completedLessonIds || [])],
+              : [
+                  ...savedLessons,
+                  ...(storedProgress?.completedLessonIds || []).filter(
+                    (lessonId) => allLessons.find((lesson) => lesson.id === lessonId)?.type !== 'quiz',
+                  ),
+                ],
           );
           setCompletedLessonIds(mergedLessons);
           const resumeLesson =
@@ -901,7 +935,7 @@ export function CoursePlayer({
   const submitQuiz = () => {
     setQuizSubmitted(true);
     if (quizQuestions.length && quizScore >= quizMeta.passingScore) {
-      markLessonCompleted(activeLesson);
+      markLessonCompleted(activeLesson, true);
     }
   };
 
@@ -913,6 +947,7 @@ export function CoursePlayer({
       signInToUnlock();
       return;
     }
+    if (allLessons.find((lesson) => lesson.id === lessonId)?.type === 'quiz') return;
     setCompletedLessonIds((prev) => {
       const next = new Set(prev);
       let isCompleted = true;
@@ -927,8 +962,11 @@ export function CoursePlayer({
     });
   };
 
-  function markLessonCompleted(lesson?: CourseLesson) {
+  function markLessonCompleted(lesson?: CourseLesson, examPassed = false) {
     if (!lesson || !hasFullAccess) return;
+    // The exam is never completed by watching time, clicking or going to the next lesson:
+    // only by passing it (which also unlocks the certificate).
+    if (lesson.type === 'quiz' && !examPassed) return;
 
     setCompletedLessonIds((prev) => {
       if (prev.has(lesson.id)) {
@@ -2082,6 +2120,8 @@ export function CoursePlayer({
                 <div className="flex gap-4 overflow-x-auto text-xs font-semibold text-[#c4bdd8] sm:text-sm scrollbar-none">
               {[
                 { key: 'overview', label: 'Overview' },
+                ...(presentation ? [{ key: 'presentation', label: 'Presentation' }] : []),
+                { key: 'qa', label: 'Questions' },
                 { key: 'resources', label: 'Resources & Links' },
               ].map((tab) => (
                 <button
@@ -2258,118 +2298,14 @@ export function CoursePlayer({
               </div>
             )}
 
-            {/* TAB: Q&A */}
-            {activeTab === 'qa' && (
-              <div className="mx-auto max-w-4xl space-y-6">
-                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-white/70" />
-                    <input
-                      type="text"
-                      placeholder="Search questions in this course..."
-                      value={searchQA}
-                      onChange={(e) => setSearchQA(e.target.value)}
-                      className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-4 text-sm text-white placeholder:text-white/70 focus:border-[#7c3aed] focus:outline-none"
-                    />
-                  </div>
-                  <Button
-                    onClick={() => setShowAskForm(!showAskForm)}
-                    className="bg-[#7c3aed] text-white hover:bg-[#6d31dc]"
-                  >
-                    {showAskForm ? 'Close Question Form' : 'Ask a new question'}
-                  </Button>
-                </div>
-
-                {/* Ask form */}
-                {showAskForm && (
-                  <div className="rounded-2xl border border-white/10 bg-[#171322] p-5">
-                    <h3 className="text-base font-bold text-white">Ask Monir & the MedTech Faculty</h3>
-                    <input
-                      type="text"
-                      placeholder="Title or summary of your question..."
-                      value={newQuestionTitle}
-                      onChange={(e) => setNewQuestionTitle(e.target.value)}
-                      className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 p-2.5 text-sm text-white placeholder:text-white/70 focus:border-[#7c3aed] focus:outline-none"
-                    />
-                    <textarea
-                      rows={3}
-                      placeholder="Details, clause references, or specific device challenges..."
-                      value={newQuestionText}
-                      onChange={(e) => setNewQuestionText(e.target.value)}
-                      className="mt-3 w-full rounded-lg border border-white/10 bg-white/5 p-2.5 text-sm text-white placeholder:text-white/70 focus:border-[#7c3aed] focus:outline-none"
-                    />
-                    <div className="mt-3 flex justify-end">
-                      <Button
-                        onClick={handleAddQuestion}
-                        className="bg-[#7c3aed] text-white hover:bg-[#6d31dc]"
-                      >
-                        Post Question
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Questions List */}
-                <div className="space-y-4">
-                  {qaList
-                    .filter((q) =>
-                      q.question.toLowerCase().includes(searchQA.toLowerCase())
-                    )
-                    .map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-2xl border border-white/10 bg-[#171322] p-5"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex size-9 items-center justify-center rounded-full bg-[#7c3aed]/30 font-bold text-[#ded6f3]">
-                              {item.author[0]}
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-white">{item.author}</h4>
-                              <p className="text-[11px] text-[#b9b1cf]">{item.role} • {item.timeAgo}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-[#b58dfb]">
-                            <ThumbsUp className="size-3" />
-                            <span>{item.votes}</span>
-                          </div>
-                        </div>
-
-                        <p className="mt-3 text-sm leading-relaxed text-[#dcd6ec] whitespace-pre-line">
-                          {item.question}
-                        </p>
-
-                        {/* Answers */}
-                        {item.answers.map((ans, idx) => (
-                          <div
-                            key={idx}
-                            className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4"
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="flex size-7 items-center justify-center rounded-full bg-[#7c3aed] text-xs font-bold text-white">
-                                M
-                              </div>
-                              <div>
-                                <span className="text-xs font-bold text-white">{ans.author}</span>
-                                {ans.isInstructor && (
-                                  <Badge className="ml-2 bg-[#7c3aed] text-[10px] text-white">
-                                    Instructor
-                                  </Badge>
-                                )}
-                              </div>
-                              <span className="text-[11px] text-[#b9b1cf] ml-auto">{ans.timeAgo}</span>
-                            </div>
-                            <p className="mt-2 text-xs leading-relaxed text-[#c6bed8] sm:text-sm">
-                              {ans.content}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
+            {/* TAB: QUESTIONS */}
+            {activeTab === 'qa' && activeLesson ? (
+              <LessonComments
+                courseId={courseId}
+                lessonId={activeLesson.id}
+                lessonTitle={activeLesson.title}
+              />
+            ) : null}
 
             {/* TAB: NOTES */}
             {activeTab === 'notes' && (
@@ -2527,6 +2463,46 @@ export function CoursePlayer({
               </div>
             )}
 
+            {/* TAB: PRESENTATION */}
+            {activeTab === 'presentation' && presentation ? (
+              <div className="mx-auto max-w-5xl space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-base font-bold text-white">Lesson presentation</h3>
+                  <div className="flex gap-2">
+                    <a
+                      href={presentation.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 text-xs font-bold text-white transition hover:bg-white/10"
+                    >
+                      Open full screen
+                    </a>
+                    <a
+                      href={presentation.url}
+                      download
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#7c3aed] px-3 text-xs font-bold text-white transition hover:bg-[#6d31dc]"
+                    >
+                      Download
+                    </a>
+                  </div>
+                </div>
+                {presentation.embedUrl ? (
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
+                    <iframe
+                      src={presentation.embedUrl}
+                      title="Lesson presentation"
+                      className="h-[60vh] min-h-[360px] w-full border-0 lg:h-[70vh]"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  <p className="rounded-2xl border border-white/10 bg-[#171322] p-6 text-sm text-[#c6bed8]">
+                    Open the presentation with the button above.
+                  </p>
+                )}
+              </div>
+            ) : null}
+
             {/* TAB: RESOURCES */}
             {activeTab === 'resources' && (
               <div className="mx-auto max-w-4xl space-y-4">
@@ -2641,21 +2617,27 @@ export function CoursePlayer({
                                         : 'border-transparent text-[#c8c0da] hover:bg-white/5'
                                   }`}
                                 >
-                                  {/* Checkbox */}
-                                  <button
-                                    type="button"
-                                    onClick={(e) => toggleLessonCompleted(lesson.id, e)}
-                                    className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition ${
-                                      isDone
-                                        ? 'border-[#34d4c6] bg-[#34d4c6] text-[#0e0c14]'
-                                        : isLocked
-                                          ? 'border-white/10 bg-white/[0.03] text-white/60'
-                                          : 'border-white/30 bg-white/5 hover:border-white'
-                                    }`}
-                                    aria-label={isLocked ? 'Sign in to unlock lesson' : 'Toggle completed'}
-                                  >
-                                    {isDone ? <Check className="size-3 stroke-[3]" /> : isLocked ? <LockKeyhole className="size-2.5" /> : null}
-                                  </button>
+                                  {/* The exam has no tick box: it is completed only by passing it. */}
+                                  {lesson.type === 'quiz' ? (
+                                    <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
+                                      <Award className={`size-4 ${isDone ? 'text-[#34d4c6]' : 'text-white/45'}`} />
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => toggleLessonCompleted(lesson.id, e)}
+                                      className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition ${
+                                        isDone
+                                          ? 'border-[#34d4c6] bg-[#34d4c6] text-[#0e0c14]'
+                                          : isLocked
+                                            ? 'border-white/10 bg-white/[0.03] text-white/60'
+                                            : 'border-white/30 bg-white/5 hover:border-white'
+                                      }`}
+                                      aria-label={isLocked ? 'Sign in to unlock lesson' : 'Toggle completed'}
+                                    >
+                                      {isDone ? <Check className="size-3 stroke-[3]" /> : isLocked ? <LockKeyhole className="size-2.5" /> : null}
+                                    </button>
+                                  )}
 
                                   <div className="flex-1">
                                     <p

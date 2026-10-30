@@ -1,17 +1,43 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
 
 import { AcademyFooter, AcademyHeader } from '@/components/academy-shell';
 import {
   completeOAuthSignIn,
+  getAcademyAuthHeader,
   getStoredAcademySession,
   signInWithGoogle,
   signInAcademyUser,
   signUpAcademyUser,
 } from '@/lib/academy-session';
+
+const DEFAULT_NEXT = '/academy/my-learning';
+
+/**
+ * Where to go after signing in. A page the learner asked for (a course, the checkout...) is
+ * respected; otherwise an approved instructor lands on their dashboard.
+ */
+async function goAfterLogin(target: string) {
+  let destination = target;
+
+  if (target === DEFAULT_NEXT) {
+    const session = getStoredAcademySession();
+    if (session) {
+      try {
+        const response = await fetch('/api/academy/instructor', { headers: getAcademyAuthHeader(session) });
+        const payload = (await response.json().catch(() => ({}))) as { status?: string };
+        if (response.ok && payload.status === 'approved') destination = '/academy/instructor';
+      } catch {
+        // Not an instructor, or the check failed: the normal page opens.
+      }
+    }
+  }
+
+  window.location.assign(destination);
+}
 
 type AcademyAuthPageProps = {
   mode: 'login' | 'signup';
@@ -25,28 +51,31 @@ export function AcademyAuthPage({ mode }: AcademyAuthPageProps) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const nextPath = useMemo(() => {
-    if (typeof window === 'undefined') {
-      return '/academy/my-learning';
-    }
+  // Read after the page loads: the server renders the default, so both sides match.
+  const [nextPath, setNextPath] = useState(DEFAULT_NEXT);
+  const [nextReady, setNextReady] = useState(false);
 
+  useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('next');
-    return requested?.startsWith('/academy')
-      ? requested
-      : '/academy/my-learning';
+    if (requested?.startsWith('/academy')) {
+      setNextPath(requested);
+    }
+    setNextReady(true);
   }, []);
 
   useEffect(() => {
+    if (!nextReady) return;
+
     completeOAuthSignIn().then((result) => {
       if (result?.ok) {
-        window.location.assign(result.next);
+        void goAfterLogin(result.next);
       } else if (result) {
         setMessage(result.message);
       } else if (getStoredAcademySession()) {
-        window.location.assign(nextPath);
+        void goAfterLogin(nextPath);
       }
     });
-  }, [nextPath]);
+  }, [nextPath, nextReady]);
 
   function onGoogle() {
     const result = signInWithGoogle(nextPath);
@@ -68,7 +97,7 @@ export function AcademyAuthPage({ mode }: AcademyAuthPageProps) {
     setPending(false);
 
     if (result.ok) {
-      window.location.assign(nextPath);
+      await goAfterLogin(nextPath);
       return;
     }
 

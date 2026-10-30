@@ -16,6 +16,8 @@ import {
   Trophy,
   FlaskConical,
   Laptop,
+  LayoutDashboard,
+  Presentation,
   LogOut,
   Menu,
   Map as MapIcon,
@@ -31,6 +33,7 @@ import {
 } from "lucide-react";
 import {
   clearAcademySession,
+  getAcademyAuthHeader,
   getAcademyAvatarUrl,
   getAcademyDisplayName,
   getStoredAcademySession,
@@ -67,6 +70,10 @@ const aboutMenuItems: MegaMenuItem[] = [
   { title: "Our Team", description: "Meet experts dedicated to guiding your products safely to market.", href: "https://easymedicaldevice.com/team/", icon: Users },
 ];
 
+// The "Become an instructor" link is hidden from the menus for now. Set to true to show it again.
+// The page itself still works at /academy/become-instructor.
+const SHOW_BECOME_INSTRUCTOR = false;
+
 const SITE = "https://easymedicaldevice.com";
 
 // Same menu as easymedicaldevice.com: six services (two columns) and the platforms panel.
@@ -100,6 +107,53 @@ const mainSiteMenu: MainMenuItem[] = [
   { label: "About", href: "https://easymedicaldevice.com/about/", megaMenu: aboutMenuItems, width: "w-[390px]", gridCols: "grid-cols-1" },
 ];
 
+/* ── Instructor status ──────────────────────── */
+type InstructorStatus = "none" | "pending" | "approved" | "rejected";
+
+// Whether the signed-in learner is an approved instructor (remembered for a few minutes).
+function useInstructorStatus(session: AcademySession | null): InstructorStatus {
+  const [status, setStatus] = useState<InstructorStatus>("none");
+
+  useEffect(() => {
+    if (!session) {
+      setStatus("none");
+      return;
+    }
+
+    const key = `emd-academy-instructor:${session.user.id}`;
+    try {
+      const cached = JSON.parse(window.sessionStorage.getItem(key) || "null") as { status: InstructorStatus; at: number } | null;
+      if (cached && Date.now() - cached.at < 5 * 60 * 1000) {
+        setStatus(cached.status);
+        return;
+      }
+    } catch {
+      // No cache: ask the server below.
+    }
+
+    let active = true;
+    fetch("/api/academy/instructor", { headers: getAcademyAuthHeader(session) })
+      .then(async (response) => (response.ok ? ((await response.json()) as { status?: InstructorStatus }) : null))
+      .then((payload) => {
+        const next = payload?.status || "none";
+        if (!active) return;
+        setStatus(next);
+        try {
+          window.sessionStorage.setItem(key, JSON.stringify({ status: next, at: Date.now() }));
+        } catch {
+          // Private mode: the next page asks again.
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [session]);
+
+  return status;
+}
+
 /* ── Mobile menu ────────────────────────────── */
 function MobileMenu({
   open,
@@ -109,6 +163,7 @@ function MobileMenu({
   avatarUrl,
   initials,
   activePage,
+  instructorStatus,
   onSignOut,
 }: {
   open: boolean;
@@ -118,6 +173,7 @@ function MobileMenu({
   avatarUrl: string | null;
   initials: string;
   activePage: string;
+  instructorStatus: InstructorStatus;
   onSignOut: () => void;
 }) {
   const [section, setSection] = useState<string | null>(null);
@@ -189,6 +245,11 @@ function MobileMenu({
                   <p className="truncate text-xs text-[#6e687d]">{session.user.email}</p>
                 </div>
               </div>
+              {instructorStatus === "approved" ? (
+                <Link href="/academy/instructor" onClick={onClose} className={rowClass}>
+                  <LayoutDashboard className="size-5 text-[#7c3aed]" /> My Instructor Space
+                </Link>
+              ) : null}
               <Link href="/academy/my-learning" onClick={onClose} className={`${rowClass} ${activePage === "my-learning" ? activeRowClass : ""}`}>
                 <GraduationCap className="size-5 text-[#7c3aed]" /> My Learning
               </Link>
@@ -198,6 +259,11 @@ function MobileMenu({
               <Link href="/academy/billing" onClick={onClose} className={`${rowClass} ${activePage === "billing" ? activeRowClass : ""}`}>
                 <Receipt className="size-5 text-[#7c3aed]" /> Billing &amp; invoices
               </Link>
+              {instructorStatus === "approved" ? (
+                <Link href="/academy/instructor" onClick={onClose} className={rowClass}>
+                  <LayoutDashboard className="size-5 text-[#7c3aed]" /> Instructor dashboard
+                </Link>
+              ) : null}
               <Link href="/academy/profile" onClick={onClose} className={`${rowClass} ${activePage === "profile" ? activeRowClass : ""}`}>
                 <User className="size-5 text-[#7c3aed]" /> My Profile
               </Link>
@@ -226,8 +292,11 @@ function MobileMenu({
           {[
             { label: "Courses", href: "/academy#courses", icon: BookOpen },
             { label: "Certificate", href: "/academy#certificate", icon: ShieldCheck },
-            { label: "Instructor", href: "/academy#instructor", icon: Users },
+            { label: "Meet the expert", href: "/academy#instructor", icon: Users },
             { label: "Community", href: "/academy#community", icon: Network },
+            ...(instructorStatus === "approved" || !SHOW_BECOME_INSTRUCTOR
+              ? []
+              : [{ label: "Become an instructor", href: "/academy/become-instructor", icon: Presentation }]),
           ].map(({ label, href, icon: Icon }) => (
             <Link key={label} href={href} onClick={onClose} className={rowClass}>
               <Icon className="size-5 text-[#7c3aed]" /> {label}
@@ -335,6 +404,7 @@ export function AcademyHeader({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [session, setSession] = useState<AcademySession | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const instructorStatus = useInstructorStatus(session);
   const menuTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileRef = useRef<HTMLDivElement | null>(null);
 
@@ -509,22 +579,25 @@ export function AcademyHeader({
         <nav className="hidden items-center gap-6 text-sm font-medium text-[#514b63] lg:flex">
           <Link href="/academy#courses" className="transition hover:text-[#6b34e9]">Courses</Link>
           <Link href="/academy#certificate" className="transition hover:text-[#6b34e9]">Certificate</Link>
-          <Link href="/academy#instructor" className="transition hover:text-[#6b34e9]">Instructor</Link>
+          <Link href="/academy#instructor" className="transition hover:text-[#6b34e9]">Meet the expert</Link>
           <Link href="/academy#community" className="transition hover:text-[#6b34e9]">Community</Link>
+          {instructorStatus === "approved" || !SHOW_BECOME_INSTRUCTOR ? null : (
+            <Link href="/academy/become-instructor" className="font-semibold text-[#7c3aed] transition hover:text-[#6b34e9]">Become an instructor</Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-3">
           {session ? (
             <>
               <Link
-                href="/academy/my-learning"
+                href={instructorStatus === "approved" ? "/academy/instructor" : "/academy/my-learning"}
                 className={`hidden whitespace-nowrap rounded-lg px-3 py-2 text-sm transition sm:inline-flex ${
                   activePage === "my-learning"
                     ? "font-bold text-[#7c3aed] bg-white border border-[#ded6f3]"
                     : "font-semibold text-[#514b63] hover:bg-white hover:text-[#6b34e9]"
                 }`}
               >
-                My Learning
+                {instructorStatus === "approved" ? "My Instructor Space" : "My Learning"}
               </Link>
 
               {/* Profile Avatar Dropdown */}
@@ -623,6 +696,26 @@ export function AcademyHeader({
                         <Receipt className="size-4 text-[#7c3aed]" />
                         <span>Billing &amp; invoices</span>
                       </Link>
+
+                      {instructorStatus === "approved" ? (
+                        <Link
+                          href="/academy/instructor"
+                          onClick={() => setProfileOpen(false)}
+                          className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-[#302945] transition hover:bg-[#f8f6ff] hover:text-[#6b34e9]"
+                        >
+                          <LayoutDashboard className="size-4 text-[#7c3aed]" />
+                          <span>Instructor dashboard</span>
+                        </Link>
+                      ) : instructorStatus === "pending" ? (
+                        <Link
+                          href="/academy/instructor/apply"
+                          onClick={() => setProfileOpen(false)}
+                          className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-[#302945] transition hover:bg-[#f8f6ff] hover:text-[#6b34e9]"
+                        >
+                          <Presentation className="size-4 text-[#7c3aed]" />
+                          <span>Instructor application</span>
+                        </Link>
+                      ) : null}
                     </div>
 
                     {/* Sign out */}
@@ -653,14 +746,14 @@ export function AcademyHeader({
                 Log in
               </Link>
               <Link
-                href="/academy/my-learning"
+                href={instructorStatus === "approved" ? "/academy/instructor" : "/academy/my-learning"}
                 className={`hidden whitespace-nowrap rounded-lg px-3 py-2 text-sm transition sm:inline-flex ${
                   activePage === "my-learning"
                     ? "font-bold text-[#7c3aed] bg-white border border-[#ded6f3]"
                     : "font-semibold text-[#514b63] hover:bg-white hover:text-[#6b34e9]"
                 }`}
               >
-                My Learning
+                {instructorStatus === "approved" ? "My Instructor Space" : "My Learning"}
               </Link>
               {activePage === "my-learning" ? (
                 <Link
@@ -703,6 +796,7 @@ export function AcademyHeader({
       avatarUrl={avatarUrl}
       initials={initials}
       activePage={activePage}
+      instructorStatus={instructorStatus}
       onSignOut={handleSignOut}
     />
   </>
@@ -757,6 +851,7 @@ const footerColumns: {
         { label: "Blog", href: `${MAIN_SITE}/blog/` },
         { label: "Magazines", href: `${MAIN_SITE}/emd-mag/` },
         { label: "Academy", href: "/academy" },
+        ...(SHOW_BECOME_INSTRUCTOR ? [{ label: "Become an instructor", href: "/academy/become-instructor" }] : []),
       ],
     },
     {

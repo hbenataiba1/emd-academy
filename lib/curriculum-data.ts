@@ -45,6 +45,8 @@ export type CourseCurriculum = {
   studentCount: number;
   lastUpdated: string;
   totalDuration: string;
+  /** The course presentation (slides), shown in every lesson. */
+  presentationUrl?: string;
   sections: CourseSection[];
 };
 
