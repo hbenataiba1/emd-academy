@@ -1040,6 +1040,7 @@ export function CoursePlayer({
 
   const openLinkedInCertificate = () => {
     shareCertificateOnLinkedIn({
+      courseTitle: curriculum.title,
       certificateTitle: quizMeta.certificateTitle,
       certificateNumber,
       issuedAt: issuedCertificate?.issued_at,
@@ -2802,6 +2803,8 @@ export function CoursePlayer({
         certificateTitle={quizMeta.certificateTitle}
         certificateNumber={certificateNumber}
         issuedAt={issuedCertificate?.issued_at}
+        learnerName={learnerName}
+        issuedDate={certificateIssuedDate}
         onDownload={downloadCertificate}
       />
     </div>

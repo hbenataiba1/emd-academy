@@ -1,6 +1,7 @@
 import { ImageResponse } from 'next/og';
 
 import { formatCertificateDate } from '@/lib/academy-certificate';
+import { getAcademySupabaseConfig } from '@/lib/academy-auth';
 import { lookupCertificate } from '@/lib/academy-verify';
 
 // The picture LinkedIn (and other sites) show when the verification link is shared:
@@ -14,6 +15,26 @@ export default async function Image({ params }: { params: Promise<{ certificateN
   const { certificateNumber } = await params;
   const certificate = await lookupCertificate(decodeURIComponent(certificateNumber));
   const valid = Boolean(certificate && !certificate.revoked);
+
+  // The real certificate, when the learner has opened the share window (it is stored then).
+  if (certificate && !certificate.revoked) {
+    const config = getAcademySupabaseConfig();
+    if (config) {
+      try {
+        const stored = await fetch(
+          `${config.url.replace(/\/$/, '')}/storage/v1/object/public/academy-media/certificate-previews/${encodeURIComponent(certificate.certificateNumber)}.png`,
+          { cache: 'no-store' },
+        );
+        if (stored.ok && (stored.headers.get('content-type') || '').startsWith('image/')) {
+          return new Response(await stored.arrayBuffer(), {
+            headers: { 'content-type': 'image/png', 'cache-control': 'public, max-age=300' },
+          });
+        }
+      } catch {
+        // Not stored yet: the drawn certificate below is used.
+      }
+    }
+  }
 
   if (!certificate) {
     return new ImageResponse(

@@ -242,6 +242,8 @@ function CourseCard({
         certificateTitle={certificateTitle}
         certificateNumber={certificateNumber}
         issuedAt={issuedAt}
+        learnerName={learnerName}
+        issuedDate={formatCertificateDate(issuedAt)}
         onDownload={downloadCertificate}
       />
       <div className="relative h-40 overflow-hidden bg-[#f4f0ff]">

@@ -362,6 +362,45 @@ async function renderCertificateJpeg(payload: CertificateSvgPayload) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
+/**
+ * The real certificate (the same one as the PDF) on a 1200x627 picture, the size of a link
+ * preview, so social sites show it whole instead of cropping it.
+ */
+export async function renderCertificatePreviewPng(payload: CertificateSvgPayload): Promise<Blob> {
+  const image = await loadSvgImage(await buildCertificateSvgWithFonts(payload));
+  const canvas = document.createElement('canvas');
+  canvas.width = 1200;
+  canvas.height = 627;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Canvas is not available.');
+
+  const draw = () => {
+    const background = context.createLinearGradient(0, 0, 1200, 627);
+    background.addColorStop(0, '#2a0a52');
+    background.addColorStop(1, '#6d28d9');
+    context.fillStyle = background;
+    context.fillRect(0, 0, 1200, 627);
+
+    const height = 571;
+    const width = height * 1.6;
+    context.save();
+    context.shadowColor = 'rgba(0,0,0,0.45)';
+    context.shadowBlur = 36;
+    context.shadowOffsetY = 12;
+    context.drawImage(image, (1200 - width) / 2, (627 - height) / 2, width, height);
+    context.restore();
+  };
+
+  // Embedded fonts can finish decoding just after load, so paint twice.
+  draw();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  draw();
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('The certificate preview could not be created.');
+  return blob;
+}
+
 export type JpegPdfSize = {
   width: number;
   height: number;
@@ -444,10 +483,13 @@ export async function downloadCertificatePdf(payload: CertificateSvgPayload) {
 }
 
 export function openLinkedInCertificate({
+  courseTitle,
   certificateTitle,
   certificateNumber,
   issuedAt,
 }: {
+  /** The name of the certification on the learner profile: the name of the course. */
+  courseTitle?: string;
   certificateTitle: string;
   certificateNumber: string;
   issuedAt?: string;
@@ -455,8 +497,8 @@ export function openLinkedInCertificate({
   const issueDate = issuedAt ? new Date(issuedAt) : new Date();
   const params = new URLSearchParams({
     startTask: 'CERTIFICATION_NAME',
-    name: certificateTitle,
-    organizationName: 'Easy Medical Device Academy',
+    name: courseTitle || certificateTitle,
+    organizationName: 'Easy Medical Device',
     issueYear: String(issueDate.getFullYear()),
     issueMonth: String(issueDate.getMonth() + 1),
     certId: certificateNumber,

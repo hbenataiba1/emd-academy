@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Award, Check, Copy, Download, ExternalLink, LoaderCircle, Share2, Sparkles, X } from 'lucide-react';
 
 import { openLinkedInCertificate } from '@/lib/academy-certificate';
+import { ensureCertificatePreview } from '@/lib/certificate-preview';
 import { LINKEDIN_POST_COUNT, buildLinkedInPost } from '@/lib/linkedin-posts';
 
 function shuffled(from: number[]) {
@@ -28,6 +29,8 @@ export function LinkedInShareDialog({
   certificateTitle,
   certificateNumber,
   issuedAt,
+  learnerName,
+  issuedDate,
   onDownload,
 }: {
   open: boolean;
@@ -36,12 +39,16 @@ export function LinkedInShareDialog({
   certificateTitle: string;
   certificateNumber: string;
   issuedAt?: string;
+  /** Used to draw the real certificate as the preview of the link. */
+  learnerName?: string;
+  issuedDate?: string;
   /** Lets the learner download the certificate to attach it to the post. */
   onDownload?: () => void;
 }) {
   const [text, setText] = useState('');
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [preview, setPreview] = useState<'idle' | 'preparing' | 'ready' | 'failed'>('idle');
   const deck = useRef<number[]>([]);
   const current = useRef(0);
   const timers = useRef<number[]>([]);
@@ -68,6 +75,23 @@ export function LinkedInShareDialog({
     setGenerating(false);
     return stopTimers;
   }, [open, courseTitle, certificateNumber, stopTimers]);
+
+  // The picture LinkedIn will show for the link is the learner's real certificate.
+  useEffect(() => {
+    if (!open || !learnerName || !issuedDate) return;
+    let active = true;
+    setPreview('preparing');
+    ensureCertificatePreview({ learnerName, courseTitle, certificateTitle, certificateNumber, issuedDate })
+      .then((ok) => {
+        if (active) setPreview(ok ? 'ready' : 'failed');
+      })
+      .catch(() => {
+        if (active) setPreview('failed');
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, learnerName, issuedDate, courseTitle, certificateTitle, certificateNumber]);
 
   useEffect(() => {
     if (!open) return;
@@ -194,7 +218,7 @@ export function LinkedInShareDialog({
           <button
             type="button"
             onClick={() => void post()}
-            disabled={generating}
+            disabled={generating || preview === 'preparing'}
             className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#0a66c2] px-5 text-sm font-black text-white transition hover:bg-[#004182] disabled:opacity-60"
           >
             <ExternalLink className="size-4" aria-hidden="true" /> Post on LinkedIn
@@ -210,7 +234,19 @@ export function LinkedInShareDialog({
           </button>
         </div>
 
-        <p className="mt-3 text-xs leading-5 text-[#6e687d]">
+        <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#6e687d]">
+          {preview === 'preparing' ? (
+            <>
+              <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> Preparing your certificate preview...
+            </>
+          ) : preview === 'ready' ? (
+            <>
+              <Check className="size-3.5 text-[#0f8a5f]" aria-hidden="true" /> Your certificate will appear in the LinkedIn post.
+            </>
+          ) : null}
+        </p>
+
+        <p className="mt-2 text-xs leading-5 text-[#6e687d]">
           LinkedIn opens with this text in a new post. If the box is empty, just paste it: the text is already copied.
         </p>
 
@@ -226,7 +262,7 @@ export function LinkedInShareDialog({
           ) : null}
           <button
             type="button"
-            onClick={() => openLinkedInCertificate({ certificateTitle, certificateNumber, issuedAt })}
+            onClick={() => openLinkedInCertificate({ courseTitle, certificateTitle, certificateNumber, issuedAt })}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f4f0ff] px-4 py-2.5 text-xs font-bold text-[#6d28d9] transition hover:bg-[#ebe4ff]"
           >
             <Award className="size-4" aria-hidden="true" /> Add it to my profile (Licenses &amp; certifications)
