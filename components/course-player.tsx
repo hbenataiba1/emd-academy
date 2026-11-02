@@ -815,8 +815,20 @@ export function CoursePlayer({
         });
         const profile = (await profileResponse.json().catch(() => ({}))) as {
           progress?: Record<string, string[]>;
+          certificates?: (IssuedCertificate & { course_id?: string })[];
         };
-        const savedLessons = profile.progress?.[courseId] || [];
+        const savedLessons = [...(profile.progress?.[courseId] || [])];
+        // A learner who already holds the certificate has nothing left to pass, even if an
+        // exam was added to the course afterwards.
+        const ownCertificate = profile.certificates?.find(
+          (item) => item.course_id === courseId && item.certificate_number,
+        );
+        if (ownCertificate) {
+          allLessons.forEach((lesson) => {
+            if (lesson.type === 'quiz' && !savedLessons.includes(lesson.id)) savedLessons.push(lesson.id);
+          });
+          if (!cancelled) setIssuedCertificate(ownCertificate);
+        }
         const storedProgress = getStoredCourseProgress(courseId);
 
         if (!cancelled) {

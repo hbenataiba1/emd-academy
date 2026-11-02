@@ -93,7 +93,8 @@ export async function GET(request: Request) {
       const minutesLearned = contentLessons
         .filter((lesson) => completedIds.has(lesson.id))
         .reduce((sum, lesson) => sum + (lesson.minutes || 0), 0);
-      const examPassed = exam ? completedIds.has(exam.id) : true;
+      const hasCertificate = certificates.some((item) => item.course_id === enrollment.course_id);
+      const examPassed = exam ? completedIds.has(exam.id) || hasCertificate : true;
       const completedAll = completedContent + (exam && examPassed ? 1 : 0);
       const totalAll = Math.max(allLessons.length, 1);
       const totalLessons = Math.max(contentLessons.length, 1);
