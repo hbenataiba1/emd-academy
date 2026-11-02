@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { AcademyFooter, AcademyHeader } from '@/components/academy-shell';
+import { LinkedInShareDialog } from '@/components/linkedin-share-dialog';
 import { Badge } from '@/components/ui/badge';
 import {
   clearAcademySession,
@@ -230,10 +231,19 @@ function CourseCard({
       certificateNumber,
       issuedDate: formatCertificateDate(issuedAt),
     });
-  const shareCertificate = () =>
-    openLinkedInCertificate({ certificateTitle, certificateNumber, issuedAt });
+  const [linkedInOpen, setLinkedInOpen] = useState(false);
+  const shareCertificate = () => setLinkedInOpen(true);
   return (
     <div className="group flex flex-col overflow-hidden rounded-lg border border-[#ede9fe] bg-white transition hover:-translate-y-0.5 hover:shadow-md">
+      <LinkedInShareDialog
+        open={linkedInOpen}
+        onClose={() => setLinkedInOpen(false)}
+        courseTitle={course.title}
+        certificateTitle={certificateTitle}
+        certificateNumber={certificateNumber}
+        issuedAt={issuedAt}
+        onDownload={downloadCertificate}
+      />
       <div className="relative h-40 overflow-hidden bg-[#f4f0ff]">
         <img
           src={course.image}
@@ -339,7 +349,7 @@ function CourseCard({
                 className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[#0a66c2] px-2 py-2 text-xs font-bold text-white transition hover:bg-[#004182]"
               >
                 <Share2 className="size-3.5" />
-                LinkedIn
+                Share
               </button>
             </div>
             ) : null}

@@ -79,6 +79,7 @@ import {
   formatCertificateDate,
   openLinkedInCertificate as shareCertificateOnLinkedIn,
 } from '@/lib/academy-certificate';
+import { LinkedInShareDialog } from '@/components/linkedin-share-dialog';
 import { PlayerSkeleton } from '@/components/page-skeletons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -1035,6 +1036,8 @@ export function CoursePlayer({
     });
   };
 
+  const [linkedInOpen, setLinkedInOpen] = useState(false);
+
   const openLinkedInCertificate = () => {
     shareCertificateOnLinkedIn({
       certificateTitle: quizMeta.certificateTitle,
@@ -1430,11 +1433,11 @@ export function CoursePlayer({
                           </button>
                           <button
                             type="button"
-                            onClick={openLinkedInCertificate}
+                            onClick={() => setLinkedInOpen(true)}
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0a66c2] px-4 text-sm font-black text-white transition hover:bg-[#004182]"
                           >
                             <Share2 className="size-4" />
-                            Add to LinkedIn
+                            Share on LinkedIn
                           </button>
                         </div>
                         ) : null}
@@ -1780,11 +1783,11 @@ export function CoursePlayer({
                           </button>
                           <button
                             type="button"
-                            onClick={openLinkedInCertificate}
+                            onClick={() => setLinkedInOpen(true)}
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0a66c2] px-4 text-sm font-black text-white transition hover:bg-[#004182]"
                           >
                             <Share2 className="size-4" />
-                            Add to LinkedIn
+                            Share on LinkedIn
                           </button>
                         </>
                       ) : null}
@@ -2790,6 +2793,17 @@ export function CoursePlayer({
           </div>
         </div>
       )}
+
+      {/* One copy for both certificate screens */}
+      <LinkedInShareDialog
+        open={linkedInOpen}
+        onClose={() => setLinkedInOpen(false)}
+        courseTitle={curriculum.title}
+        certificateTitle={quizMeta.certificateTitle}
+        certificateNumber={certificateNumber}
+        issuedAt={issuedCertificate?.issued_at}
+        onDownload={downloadCertificate}
+      />
     </div>
   );
 }

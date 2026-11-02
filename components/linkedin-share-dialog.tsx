@@ -1,0 +1,239 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Award, Check, Copy, Download, ExternalLink, LoaderCircle, Share2, Sparkles, X } from 'lucide-react';
+
+import { openLinkedInCertificate } from '@/lib/academy-certificate';
+import { LINKEDIN_POST_COUNT, buildLinkedInPost } from '@/lib/linkedin-posts';
+
+function shuffled(from: number[]) {
+  const copy = [...from];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const other = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[other]] = [copy[other], copy[index]];
+  }
+  return copy;
+}
+
+/**
+ * "Share on LinkedIn": a post that is already written. One click opens LinkedIn with the
+ * text in the new-post box (it is also copied, in case LinkedIn leaves the box empty).
+ * "Write another post" gives a different version each time.
+ */
+export function LinkedInShareDialog({
+  open,
+  onClose,
+  courseTitle,
+  certificateTitle,
+  certificateNumber,
+  issuedAt,
+  onDownload,
+}: {
+  open: boolean;
+  onClose: () => void;
+  courseTitle: string;
+  certificateTitle: string;
+  certificateNumber: string;
+  issuedAt?: string;
+  /** Lets the learner download the certificate to attach it to the post. */
+  onDownload?: () => void;
+}) {
+  const [text, setText] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const deck = useRef<number[]>([]);
+  const current = useRef(0);
+  const timers = useRef<number[]>([]);
+
+  const stopTimers = useCallback(() => {
+    timers.current.forEach((id) => {
+      window.clearTimeout(id);
+      window.clearInterval(id);
+    });
+    timers.current = [];
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      stopTimers();
+      return;
+    }
+    // Every learner gets their own random order, starting with a random post.
+    const order = shuffled(Array.from({ length: LINKEDIN_POST_COUNT }, (_, index) => index));
+    current.current = order[0];
+    deck.current = order.slice(1);
+    setText(buildLinkedInPost({ courseTitle, certificateNumber, index: order[0] }));
+    setCopied(false);
+    setGenerating(false);
+    return stopTimers;
+  }, [open, courseTitle, certificateNumber, stopTimers]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open || typeof document === 'undefined') return null;
+
+  // A different post each time: all of them are used before one comes back.
+  function generate() {
+    if (generating) return;
+    stopTimers();
+
+    if (deck.current.length === 0) {
+      deck.current = shuffled(
+        Array.from({ length: LINKEDIN_POST_COUNT }, (_, index) => index).filter((index) => index !== current.current),
+      );
+    }
+    const next = deck.current.shift() as number;
+    current.current = next;
+    const target = buildLinkedInPost({ courseTitle, certificateNumber, index: next });
+
+    setGenerating(true);
+    setCopied(false);
+    setText('');
+
+    // A short moment of "writing", then the post appears as if it was being typed.
+    const wait = window.setTimeout(() => {
+      let shown = 0;
+      const step = Math.max(2, Math.ceil(target.length / 70));
+      const typing = window.setInterval(() => {
+        shown += step;
+        if (shown >= target.length) {
+          window.clearInterval(typing);
+          setText(target);
+          setGenerating(false);
+        } else {
+          setText(target.slice(0, shown));
+        }
+      }, 18);
+      timers.current.push(typing);
+    }, 700 + Math.floor(Math.random() * 500));
+    timers.current.push(wait);
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // The learner can still select the text by hand.
+    }
+  }
+
+  async function post() {
+    await copy();
+    window.open(
+      `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  }
+
+  // Shown on the page itself (not inside the card that opened it), so a card effect can not move it.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/60 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="linkedin-share-title"
+        className="relative my-auto w-full max-w-xl rounded-2xl bg-white p-6 text-[#191625] shadow-2xl"
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-3 top-3 rounded-full p-1.5 text-[#8e879f] transition hover:bg-[#f1eef8] hover:text-[#3b3650]"
+        >
+          <X className="size-5" />
+        </button>
+
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 items-center justify-center rounded-full bg-[#0a66c2] text-white">
+            <Share2 className="size-5" aria-hidden="true" />
+          </span>
+          <div>
+            <h2 id="linkedin-share-title" className="text-lg font-black">
+              Share your certificate on LinkedIn
+            </h2>
+            <p className="text-xs text-[#6e687d]">Your post is ready. Change it if you like, then publish it.</p>
+          </div>
+        </div>
+
+        <textarea
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          rows={11}
+          readOnly={generating}
+          placeholder={generating ? 'Writing your post...' : undefined}
+          className="mt-5 w-full rounded-xl border border-[#d9d1ee] bg-[#faf8ff] p-4 text-sm leading-6 outline-none focus:border-[#0a66c2] focus:ring-4 focus:ring-[#0a66c2]/10"
+        />
+
+        <button
+          type="button"
+          onClick={generate}
+          disabled={generating}
+          className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-[#d9d1ee] bg-white px-4 text-sm font-bold text-[#6d28d9] transition hover:border-[#7c3aed] hover:bg-[#faf8ff] disabled:opacity-70"
+        >
+          {generating ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Sparkles className="size-4" aria-hidden="true" />}
+          {generating ? 'Writing your post...' : 'Write another post'}
+        </button>
+
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => void post()}
+            disabled={generating}
+            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#0a66c2] px-5 text-sm font-black text-white transition hover:bg-[#004182] disabled:opacity-60"
+          >
+            <ExternalLink className="size-4" aria-hidden="true" /> Post on LinkedIn
+          </button>
+          <button
+            type="button"
+            onClick={() => void copy()}
+            disabled={generating}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#d9d1ee] bg-white px-5 text-sm font-bold text-[#302945] transition hover:border-[#0a66c2] disabled:opacity-60"
+          >
+            {copied ? <Check className="size-4 text-[#0f8a5f]" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
+            {copied ? 'Copied' : 'Copy the text'}
+          </button>
+        </div>
+
+        <p className="mt-3 text-xs leading-5 text-[#6e687d]">
+          LinkedIn opens with this text in a new post. If the box is empty, just paste it: the text is already copied.
+        </p>
+
+        <div className="mt-5 grid gap-2 border-t border-[#ede8fb] pt-4 sm:grid-cols-2">
+          {onDownload ? (
+            <button
+              type="button"
+              onClick={onDownload}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f4f0ff] px-4 py-2.5 text-xs font-bold text-[#6d28d9] transition hover:bg-[#ebe4ff]"
+            >
+              <Download className="size-4" aria-hidden="true" /> Download the certificate to attach it
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => openLinkedInCertificate({ certificateTitle, certificateNumber, issuedAt })}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f4f0ff] px-4 py-2.5 text-xs font-bold text-[#6d28d9] transition hover:bg-[#ebe4ff]"
+          >
+            <Award className="size-4" aria-hidden="true" /> Add it to my profile (Licenses &amp; certifications)
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}

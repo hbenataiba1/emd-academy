@@ -7,10 +7,29 @@ import { VerifiedCertificateDownload } from '@/components/verified-certificate-d
 import { formatCertificateDate } from '@/lib/academy-certificate';
 import { lookupCertificate } from '@/lib/academy-verify';
 
-export const metadata: Metadata = {
-  title: 'Verify certificate | Easy Medical Device Academy',
-  robots: { index: false, follow: false },
-};
+// The card shown when the link is shared (for example on LinkedIn): the certificate and its owner.
+export async function generateMetadata({ params }: { params: Promise<{ certificateNumber: string }> }): Promise<Metadata> {
+  const { certificateNumber } = await params;
+  const certificate = await lookupCertificate(decodeURIComponent(certificateNumber));
+
+  if (!certificate || certificate.revoked) {
+    return {
+      title: 'Verify certificate | Easy Medical Device Academy',
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const title = `${certificate.learnerName}: certificate in ${certificate.courseTitle}`;
+  const description = `Verified certificate of completion from Easy Medical Device Academy. Credential ID ${certificate.certificateNumber}.`;
+
+  return {
+    title: `${title} | Easy Medical Device Academy`,
+    description,
+    robots: { index: false, follow: false },
+    openGraph: { title, description, type: 'website', siteName: 'Easy Medical Device Academy' },
+    twitter: { card: 'summary_large_image', title, description },
+  };
+}
 
 export const dynamic = 'force-dynamic';
 

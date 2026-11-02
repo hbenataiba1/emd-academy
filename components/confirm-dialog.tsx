@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type ConfirmOptions = {
   title: string;
@@ -44,7 +45,7 @@ export function useConfirm() {
     return () => window.removeEventListener('keydown', onKey);
   }, [options, close]);
 
-  const dialog = options ? (
+  const dialog = options && typeof document !== 'undefined' ? createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
       onMouseDown={(event) => {
@@ -76,7 +77,8 @@ export function useConfirm() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   ) : null;
 
   return { confirm, dialog };
