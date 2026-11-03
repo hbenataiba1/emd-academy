@@ -49,6 +49,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
+import { AcademySeoSection } from '@/components/academy-seo-section';
 import { AcademyHeader, AcademyFooter } from '@/components/academy-shell';
 import {
   type CommunityPost,
@@ -376,13 +377,13 @@ export function AcademyPage({
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.84fr)] lg:px-8 lg:py-16">
           <div>
             <h1 className="max-w-4xl text-4xl font-bold leading-[1.06] text-[#171321] sm:text-5xl lg:text-6xl">
-              The medical device academy: learn compliance from real-world experts
+              Medical device courses, taught by real-world experts
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#5f5872] sm:text-lg">
-              Easy Medical Device Academy offers online medical device courses with
+              Easy Medical Device Academy offers medical device courses with
               practical training for EU MDR, IVDR, ISO 13485, SaMD, risk
-              management, and market access, taught by working regulatory
-              experts, with a verifiable certificate.
+              management, and market access. Learn at your own pace from working
+              regulatory experts and get a verifiable certificate.
             </p>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -411,7 +412,7 @@ export function AcademyPage({
             <div className="relative overflow-hidden rounded-2xl shadow-[0_32px_80px_rgb(35_28_61/18%)]">
               <img
                 src="/academy/learn.jpg"
-                alt="Medical device compliance learning"
+                alt="Learning medical device courses online"
                 className="h-full w-full object-cover"
               />
             </div>
@@ -452,11 +453,11 @@ export function AcademyPage({
               Course catalog
             </Badge>
             <h2 className="text-3xl font-bold text-[#191625] sm:text-4xl">
-              Trending compliance courses
+              Medical device courses
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#625b75] sm:text-base">
-              Udemy-style browsing, focused entirely on regulated product teams
-              that need practical approval evidence.
+              Practical medical device courses for regulatory, quality and
+              engineering teams, from free introductions to in-depth training.
             </p>
           </div>
 
@@ -569,6 +570,8 @@ export function AcademyPage({
           </div>
         ) : null}
       </section>
+
+      <AcademySeoSection />
 
       {/* Certificate Banner Section */}
       <section
