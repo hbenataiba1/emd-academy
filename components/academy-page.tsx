@@ -1117,6 +1117,15 @@ function CourseCard({
             {course.title}
           </CardTitle>
         </Link>
+        {course.instructor ? (
+          <p className="mt-2 flex items-start gap-1.5 text-xs leading-5 text-[#625b75]">
+            <GraduationCap className="mt-0.5 size-3.5 shrink-0 text-[#7c3aed]" aria-hidden="true" />
+            <span className="line-clamp-2">
+              <strong className="font-bold text-[#191625]">{course.instructor}</strong>
+              {course.instructorCompany ? ` · ${course.instructorCompany}` : ''}
+            </span>
+          </p>
+        ) : null}
       </CardHeader>
 
       <CardContent className="flex-1 px-5 pb-5">

@@ -4,6 +4,7 @@ import {
   getAcademySupabaseConfig,
   type AcademyAuthUser,
 } from '@/lib/academy-auth';
+import { getCertificateSigner } from '@/lib/academy-certificates';
 
 export type VerifiedCertificate = {
   certificateNumber: string;
@@ -11,6 +12,9 @@ export type VerifiedCertificate = {
   courseTitle: string;
   issuedAt: string;
   revoked: boolean;
+  /** The instructor who signs it (empty for the team's own courses). */
+  instructorName?: string;
+  instructorTitle?: string;
 };
 
 type CertificateRow = {
@@ -47,9 +51,10 @@ export async function lookupCertificate(
       return null;
     }
 
-    const [courseTitle, learnerName] = await Promise.all([
+    const [courseTitle, learnerName, signer] = await Promise.all([
       getCourseTitle(row.course_id),
       getLearnerName(row.user_id, row.course_id),
+      getCertificateSigner(row.course_id),
     ]);
 
     return {
@@ -58,6 +63,8 @@ export async function lookupCertificate(
       courseTitle,
       issuedAt: row.issued_at,
       revoked: Boolean(row.revoked_at),
+      instructorName: signer.instructor_name,
+      instructorTitle: signer.instructor_title,
     };
   } catch {
     return null;

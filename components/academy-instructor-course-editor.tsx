@@ -157,7 +157,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [details, setDetails] = useState<Details | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
-  const [exam, setExam] = useState<Exam>({ passingScore: 80, timeLimitMinutes: 20, questions: [] });
+  const [exam, setExam] = useState<Exam>({ passingScore: 80, timeLimitMinutes: 0, questions: [] });
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -216,7 +216,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
       setExam(
         payload.exam
           ? { ...payload.exam, questions: payload.exam.questions.map((question) => ({ ...question, key: newKey() })) }
-          : { passingScore: 80, timeLimitMinutes: 20, questions: [] },
+          : { passingScore: 80, timeLimitMinutes: 0, questions: [] },
       );
     } catch {
       setError('Network error. Please try again.');
@@ -1033,18 +1033,52 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
                     className={`${inputClass} mt-1.5`}
                   />
                 </label>
-                <label className="block text-sm font-bold text-[#302945]">
-                  Time limit (minutes)
-                  <input
-                    type="number"
-                    min={5}
-                    max={240}
-                    value={exam.timeLimitMinutes}
-                    onChange={(e) => updateExam({ ...exam, timeLimitMinutes: Number(e.target.value) })}
-                    disabled={!editable}
-                    className={`${inputClass} mt-1.5`}
-                  />
-                </label>
+                <div className="text-sm font-bold text-[#302945]">
+                  Time limit
+                  <div className="mt-1.5 grid grid-cols-2 gap-2">
+                    {[
+                      { limited: false, label: 'No time limit' },
+                      { limited: true, label: 'Set a time limit' },
+                    ].map((option) => {
+                      const selected = (exam.timeLimitMinutes > 0) === option.limited;
+                      return (
+                        <button
+                          key={option.label}
+                          type="button"
+                          disabled={!editable}
+                          onClick={() =>
+                            updateExam({ ...exam, timeLimitMinutes: option.limited ? exam.timeLimitMinutes || 30 : 0 })
+                          }
+                          className={`h-11 rounded-xl border px-3 text-sm font-bold transition ${
+                            selected
+                              ? 'border-[#7c3aed] bg-[#f4f0ff] text-[#6d28d9]'
+                              : 'border-[#d9d1ee] bg-white text-[#302945] hover:border-[#7c3aed]'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {exam.timeLimitMinutes > 0 ? (
+                    <label className="mt-2 flex items-center gap-2 text-sm font-semibold text-[#5f5872]">
+                      <input
+                        type="number"
+                        min={5}
+                        max={240}
+                        value={exam.timeLimitMinutes}
+                        onChange={(e) => updateExam({ ...exam, timeLimitMinutes: Number(e.target.value) })}
+                        disabled={!editable}
+                        className={`${inputClass} w-28`}
+                      />
+                      minutes
+                    </label>
+                  ) : (
+                    <p className="mt-2 text-xs font-medium text-[#6e687d]">
+                      Learners can take the exam at their own pace, with no timer.
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="mt-5 space-y-4">

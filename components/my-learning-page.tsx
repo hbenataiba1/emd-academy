@@ -55,6 +55,8 @@ type LearningCourse = {
   certificate?: {
     certificate_number: string;
     issued_at: string;
+    instructor_name?: string;
+    instructor_title?: string;
   };
 };
 
@@ -177,12 +179,14 @@ function CourseCard({
 }) {
   const done = course.progress === 100;
   const certificateTitle = 'Certificate of Completion';
-  const [ensured, setEnsured] = useState<{ number: string; issuedAt: string } | null>(null);
+  const [ensured, setEnsured] = useState<{ number: string; issuedAt: string; instructorName?: string; instructorTitle?: string } | null>(null);
   const [certificateBusy, setCertificateBusy] = useState(false);
   const [certificateError, setCertificateError] = useState('');
   const certificateNumber =
     course.certificate?.certificate_number || ensured?.number || '';
   const issuedAt = course.certificate?.issued_at || ensured?.issuedAt;
+  const instructorName = course.certificate?.instructor_name || ensured?.instructorName;
+  const instructorTitle = course.certificate?.instructor_title || ensured?.instructorTitle;
 
   // Certificates only exist once the server has a record, so the QR code on them
   // can always be verified.
@@ -201,7 +205,7 @@ function CourseCard({
         body: JSON.stringify({ courseId: course.id }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
-        certificate?: { certificate_number: string; issued_at: string };
+        certificate?: { certificate_number: string; issued_at: string; instructor_name?: string; instructor_title?: string };
         message?: string;
       };
 
@@ -215,6 +219,8 @@ function CourseCard({
       setEnsured({
         number: payload.certificate.certificate_number,
         issuedAt: payload.certificate.issued_at,
+        instructorName: payload.certificate.instructor_name,
+        instructorTitle: payload.certificate.instructor_title,
       });
     } catch {
       setCertificateError('Network error. Please try again.');
@@ -230,6 +236,8 @@ function CourseCard({
       certificateTitle,
       certificateNumber,
       issuedDate: formatCertificateDate(issuedAt),
+      instructorName,
+      instructorTitle,
     });
   const [linkedInOpen, setLinkedInOpen] = useState(false);
   const shareCertificate = () => setLinkedInOpen(true);
@@ -244,6 +252,8 @@ function CourseCard({
         issuedAt={issuedAt}
         learnerName={learnerName}
         issuedDate={formatCertificateDate(issuedAt)}
+        instructorName={instructorName}
+        instructorTitle={instructorTitle}
         onDownload={downloadCertificate}
       />
       <div className="relative h-40 overflow-hidden bg-[#f4f0ff]">

@@ -12,6 +12,7 @@ import {
 } from '@/lib/academy-auth';
 import {
   ensureCertificate,
+  getCertificateSigner,
   isEligibleForCertificate,
 } from '@/lib/academy-certificates';
 import { saveLessonProgress } from '@/lib/academy-progress';
@@ -110,7 +111,7 @@ async function handleCertificateRequest(request: Request) {
       }),
     );
 
-    return json({ certificate });
+    return json({ certificate: { ...certificate, ...(await getCertificateSigner(body.courseId)) } });
   } catch (error) {
     return json(
       {

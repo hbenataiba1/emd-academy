@@ -7,6 +7,7 @@ import {
   getAcademyUserFromRequest,
   json,
 } from '@/lib/academy-auth';
+import { getCertificateSigner } from '@/lib/academy-certificates';
 import { getLessonsForCourse } from '@/lib/academy-lessons';
 
 type ProgressRow = {
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
 
   try {
     const authenticatedUser = { ...user, email: user.email };
-    const [enrollments, progress, certificates] = await Promise.all([
+    const [enrollments, progress, rawCertificates] = await Promise.all([
       getAcademyEnrollmentsForUser({
         userId: user.id,
         learnerEmail: user.email,
@@ -43,6 +44,15 @@ export async function GET(request: Request) {
         'issued_at.desc',
       ),
     ]);
+    // Each certificate carries the name of the instructor who signs it.
+    const signers = new Map(
+      await Promise.all(
+        [...new Set(rawCertificates.map((item) => item.course_id))].map(
+          async (courseId) => [courseId, await getCertificateSigner(courseId)] as const,
+        ),
+      ),
+    );
+    const certificates = rawCertificates.map((item) => ({ ...item, ...signers.get(item.course_id) }));
     const activeEnrollments = enrollments.filter((row) =>
       ['active', 'completed', 'pending_payment'].includes(row.status || ''),
     );

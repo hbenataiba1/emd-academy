@@ -8,8 +8,10 @@ import {
   CreditCard,
   ExternalLink,
   LayoutDashboard,
+  LoaderCircle,
   LogOut,
   MessageSquare,
+  Plus,
   Receipt,
   Star,
   Tag,
@@ -68,6 +70,8 @@ export function InstructorShell({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [unanswered, setUnanswered] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [creatingCourse, setCreatingCourse] = useState(false);
+  const [courseError, setCourseError] = useState('');
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -135,6 +139,32 @@ export function InstructorShell({ children }: { children: React.ReactNode }) {
     .join('')
     .slice(0, 2)
     .toUpperCase();
+
+  // Starts a new draft course and opens it in the course studio.
+  async function addCourse() {
+    const stored = getStoredAcademySession();
+    if (!stored || creatingCourse) return;
+
+    setCreatingCourse(true);
+    setCourseError('');
+    try {
+      const response = await fetch('/api/academy/instructor/courses', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...getAcademyAuthHeader(stored) },
+        body: JSON.stringify({}),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { id?: string; message?: string };
+      if (!response.ok || !payload.id) {
+        setCourseError(payload.message || 'The course could not be created.');
+        setCreatingCourse(false);
+        return;
+      }
+      window.location.assign(`/academy/instructor/courses/${encodeURIComponent(payload.id)}`);
+    } catch {
+      setCourseError('Network error. Please try again.');
+      setCreatingCourse(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#fbfbfe] text-[#191625]">
@@ -212,6 +242,19 @@ export function InstructorShell({ children }: { children: React.ReactNode }) {
                 ) : null}
               </Link>
             ))}
+
+            <div className="shrink-0 lg:mt-auto lg:pt-3">
+              <button
+                type="button"
+                onClick={() => void addCourse()}
+                disabled={creatingCourse}
+                className="flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#7c3aed] px-4 text-sm font-black text-white transition hover:bg-[#6d31dc] disabled:opacity-60"
+              >
+                {creatingCourse ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Plus className="size-4" aria-hidden="true" />}
+                Add course
+              </button>
+              {courseError ? <p className="mt-2 text-xs font-semibold text-[#c0264b]">{courseError}</p> : null}
+            </div>
           </nav>
 
           <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-5">

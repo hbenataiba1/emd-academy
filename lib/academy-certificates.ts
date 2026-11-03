@@ -8,6 +8,48 @@ export type CertificateRecord = {
   course_id: string;
 };
 
+export type CertificateSigner = {
+  instructor_name?: string;
+  instructor_title?: string;
+};
+
+/**
+ * Who signs the certificate of a course. A course taught by an outside instructor is signed
+ * by them (name, job title and company); the team's own courses keep the default signature.
+ */
+export async function getCertificateSigner(courseId: string): Promise<CertificateSigner> {
+  try {
+    const courseResponse = await academyRestFetch(
+      `courses?select=instructor,instructor_role,instructor_id&id=eq.${encodeURIComponent(courseId)}&limit=1`,
+      { useServiceRole: true },
+    );
+    if (!courseResponse.ok) return {};
+
+    const course = ((await courseResponse.json()) as {
+      instructor?: string | null;
+      instructor_role?: string | null;
+      instructor_id?: string | null;
+    }[])[0];
+    if (!course?.instructor_id || !course.instructor?.trim()) return {};
+
+    let company = '';
+    const instructorResponse = await academyRestFetch(
+      `instructors?select=company,job_title&user_id=eq.${encodeURIComponent(course.instructor_id)}&limit=1`,
+      { useServiceRole: true },
+    );
+    if (instructorResponse.ok) {
+      const row = ((await instructorResponse.json()) as { company?: string | null }[])[0];
+      company = row?.company?.trim() || '';
+    }
+
+    const role = course.instructor_role?.trim();
+    const title = [role && role !== 'Instructor' ? role : '', company].filter(Boolean).join(', ');
+    return { instructor_name: course.instructor.trim(), instructor_title: title || 'Instructor' };
+  } catch {
+    return {};
+  }
+}
+
 /**
  * One stable, collision-free number per learner and course
  * (for example EMDA-2026-3FA9C1D2). It is derived from the ids, so asking again

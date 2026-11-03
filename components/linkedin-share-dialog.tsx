@@ -31,6 +31,8 @@ export function LinkedInShareDialog({
   issuedAt,
   learnerName,
   issuedDate,
+  instructorName,
+  instructorTitle,
   onDownload,
 }: {
   open: boolean;
@@ -42,6 +44,9 @@ export function LinkedInShareDialog({
   /** Used to draw the real certificate as the preview of the link. */
   learnerName?: string;
   issuedDate?: string;
+  /** Who signs the certificate (the instructor of the course). */
+  instructorName?: string;
+  instructorTitle?: string;
   /** Lets the learner download the certificate to attach it to the post. */
   onDownload?: () => void;
 }) {
@@ -81,7 +86,7 @@ export function LinkedInShareDialog({
     if (!open || !learnerName || !issuedDate) return;
     let active = true;
     setPreview('preparing');
-    ensureCertificatePreview({ learnerName, courseTitle, certificateTitle, certificateNumber, issuedDate })
+    ensureCertificatePreview({ learnerName, courseTitle, certificateTitle, certificateNumber, issuedDate, instructorName, instructorTitle })
       .then((ok) => {
         if (active) setPreview(ok ? 'ready' : 'failed');
       })
@@ -91,7 +96,7 @@ export function LinkedInShareDialog({
     return () => {
       active = false;
     };
-  }, [open, learnerName, issuedDate, courseTitle, certificateTitle, certificateNumber]);
+  }, [open, learnerName, issuedDate, courseTitle, certificateTitle, certificateNumber, instructorName, instructorTitle]);
 
   useEffect(() => {
     if (!open) return;

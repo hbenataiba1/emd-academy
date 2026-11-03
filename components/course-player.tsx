@@ -136,6 +136,8 @@ type QuizMeta = {
 type IssuedCertificate = {
   certificate_number?: string;
   issued_at?: string;
+  instructor_name?: string;
+  instructor_title?: string;
 };
 
 function parseQuizMeta(description?: string): QuizMeta {
@@ -567,6 +569,8 @@ export function CoursePlayer({
       certificateTitle: quizMeta.certificateTitle,
       certificateNumber,
       issuedDate: certificateIssuedDate,
+      instructorName: issuedCertificate?.instructor_name,
+      instructorTitle: issuedCertificate?.instructor_title,
     },
     quizCertificateReady && Boolean(certificateNumber),
   );
@@ -1045,6 +1049,8 @@ export function CoursePlayer({
       certificateTitle: quizMeta.certificateTitle,
       certificateNumber,
       issuedDate: certificateIssuedDate,
+      instructorName: issuedCertificate?.instructor_name,
+      instructorTitle: issuedCertificate?.instructor_title,
     });
   };
 
@@ -2817,6 +2823,8 @@ export function CoursePlayer({
         issuedAt={issuedCertificate?.issued_at}
         learnerName={learnerName}
         issuedDate={certificateIssuedDate}
+        instructorName={issuedCertificate?.instructor_name}
+        instructorTitle={issuedCertificate?.instructor_title}
         onDownload={downloadCertificate}
       />
     </div>

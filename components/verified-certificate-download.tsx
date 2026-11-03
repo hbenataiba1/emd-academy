@@ -15,6 +15,8 @@ type VerifiedCertificateDownloadProps = {
   courseTitle: string;
   certificateNumber: string;
   issuedAt: string;
+  instructorName?: string;
+  instructorTitle?: string;
 };
 
 export function VerifiedCertificateDownload({
@@ -22,6 +24,8 @@ export function VerifiedCertificateDownload({
   courseTitle,
   certificateNumber,
   issuedAt,
+  instructorName,
+  instructorTitle,
 }: VerifiedCertificateDownloadProps) {
   const [downloading, setDownloading] = useState(false);
   const payload: CertificateSvgPayload = {
@@ -30,6 +34,8 @@ export function VerifiedCertificateDownload({
     certificateTitle: 'Certificate of Completion',
     certificateNumber,
     issuedDate: formatCertificateDate(issuedAt),
+    instructorName,
+    instructorTitle,
   };
   const previewUrl = useCertificatePreviewUrl(payload);
 

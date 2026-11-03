@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import {
   ArrowRight,
+  Award,
   BadgeCheck,
   Building2,
   ClipboardCheck,
@@ -37,7 +38,12 @@ const benefits = [
   {
     icon: ShieldCheck,
     title: 'We run the platform',
-    text: 'Video hosting, secure payments, certificates and automatic emails are included. You focus on teaching.',
+    text: 'Video hosting, secure payments and automatic emails are included. You focus on teaching.',
+  },
+  {
+    icon: Award,
+    title: 'Certificates, automatically',
+    text: 'When a learner passes the exam of your course, their certificate is generated automatically and can be verified online and shared on LinkedIn. Nothing to do on your side.',
   },
   {
     icon: Wallet,
@@ -78,6 +84,10 @@ const faqs = [
   {
     q: 'How and when do I get paid?',
     a: 'You keep 70% of every sale. Learners pay through the Academy, and a platform fee of 30% covers hosting, secure payments, certificates and promotion. You see your earnings in your dashboard, and our team sends your payout to you.',
+  },
+  {
+    q: 'Who creates the certificates?',
+    a: 'Nobody has to. When a learner passes the exam of your course, their certificate is generated automatically. It can be verified online and shared on LinkedIn, and you have nothing to do.',
   },
   {
     q: 'Can I answer my learners’ questions?',
@@ -190,7 +200,7 @@ export function AcademyBecomeInstructorPage() {
           {benefits.map(({ icon: Icon, title, text }, index) => (
             <div
               key={title}
-              className={`rounded-2xl border border-[#e4ddf4] bg-white p-6 shadow-sm ${index >= 3 ? 'lg:col-span-3' : 'lg:col-span-2'} ${index === benefits.length - 1 ? 'sm:col-span-2 lg:col-span-3' : ''}`}
+              className={`rounded-2xl border border-[#e4ddf4] bg-white p-6 shadow-sm lg:col-span-2`}
             >
               <span className="flex size-11 items-center justify-center rounded-full bg-[#f4f0ff] text-[#7c3aed]">
                 <Icon className="size-5" aria-hidden="true" />

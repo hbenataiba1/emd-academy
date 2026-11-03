@@ -38,7 +38,8 @@ export async function GET(request: Request) {
             sectionMap.set(secTitle, []);
           }
 
-          const durMin = l.duration_minutes || 10;
+          // An exam saved with 0 minutes has no time limit; it must not fall back to 10.
+          const durMin = l.lesson_type === 'quiz' && l.duration_minutes === 0 ? 0 : l.duration_minutes || 10;
           sectionMap.get(secTitle)!.push({
             id: String(l.id),
             title: l.title || 'Untitled Lesson',

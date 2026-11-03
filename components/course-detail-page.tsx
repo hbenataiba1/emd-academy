@@ -380,6 +380,20 @@ export function CourseDetailPage({
               {courseSubtitle}
             </p>
 
+            {course.instructor ? (
+              <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[#514b63]">
+                <UserRound className="size-4 text-[#7c3aed]" aria-hidden="true" />
+                <span>Taught by</span>
+                <strong className="font-black text-[#171321]">{course.instructor}</strong>
+                {course.instructorCompany ? (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="font-semibold">{course.instructorCompany}</span>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+
             <div className="mt-6 flex flex-wrap items-center gap-4 text-sm font-semibold text-[#514b63]">
               {course.rating > 0 ? (
                 <span className="inline-flex items-center gap-1.5">

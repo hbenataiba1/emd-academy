@@ -144,6 +144,8 @@ export default async function VerifyCertificatePage({
                 courseTitle={certificate.courseTitle}
                 certificateNumber={certificate.certificateNumber}
                 issuedAt={certificate.issuedAt}
+                instructorName={certificate.instructorName}
+                instructorTitle={certificate.instructorTitle}
               />
             ) : null}
             </>

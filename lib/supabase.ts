@@ -43,6 +43,46 @@ export async function getPublishedCoursesFromSupabase(): Promise<
       .map((row, index) => mapSupabaseCourse(row, index))
       .filter((course): course is AcademyCourse => Boolean(course));
 
+    // The company of each instructor, shown next to their name on the course page.
+    // Courses made by the team itself belong to Easy Medical Device.
+    try {
+      const instructorByCourse = new Map<string, string>();
+      rows.forEach((row) => {
+        const courseKey = row.id || row.slug;
+        if (courseKey && row.instructor_id) instructorByCourse.set(courseKey, row.instructor_id);
+      });
+
+      const companies = new Map<string, string>();
+      if (instructorByCourse.size > 0) {
+        const ids = [...new Set(instructorByCourse.values())];
+        const instructorsEndpoint = new URL('/rest/v1/instructors', supabaseUrl);
+        instructorsEndpoint.searchParams.set('select', 'user_id,company');
+        instructorsEndpoint.searchParams.set('user_id', `in.(${ids.join(',')})`);
+        // The instructors table is private, so this server-side read uses the service key.
+        const serviceKey = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
+        if (serviceKey) {
+          const instructorsResponse = await fetch(instructorsEndpoint, {
+            headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}` },
+            cache: 'no-store',
+          });
+          if (instructorsResponse.ok) {
+            ((await instructorsResponse.json()) as { user_id: string; company?: string | null }[]).forEach(
+              (item) => {
+                if (item.company?.trim()) companies.set(item.user_id, item.company.trim());
+              },
+            );
+          }
+        }
+      }
+
+      courses.forEach((course) => {
+        const instructorId = instructorByCourse.get(course.id);
+        course.instructorCompany = instructorId ? companies.get(instructorId) : 'Easy Medical Device';
+      });
+    } catch {
+      // the course page simply shows the instructor without a company
+    }
+
     // Show how many real lessons each course has (the final exam is not counted).
     // This is read from the lessons themselves, so it can never drift.
     try {

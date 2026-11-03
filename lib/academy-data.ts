@@ -20,6 +20,8 @@ export type AcademyCourse = {
   category: CourseCategory;
   instructor: string;
   instructorRole: string;
+  /** The company of the instructor, shown with their name on the course page. */
+  instructorCompany?: string;
   level: string;
   duration: string;
   lessons: number;
@@ -44,6 +46,7 @@ export type SupabaseCourseRow = Partial<{
   category: string;
   instructor: string;
   instructor_role: string;
+  instructor_id: string;
   level: string;
   duration: string;
   lesson_count: number;

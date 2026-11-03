@@ -148,7 +148,7 @@ export async function GET(
       }));
     exam = {
       passingScore: meta.passingScore ?? 80,
-      timeLimitMinutes: quiz.duration_minutes ?? 20,
+      timeLimitMinutes: quiz.duration_minutes ?? 0,
       questions,
     };
   }
@@ -318,7 +318,9 @@ export async function PUT(
         meta = {};
       }
       const passing = Math.max(30, Math.min(100, Math.round(Number(body.exam.passingScore) || 80)));
-      const limit = Math.max(5, Math.min(240, Math.round(Number(body.exam.timeLimitMinutes) || 20)));
+      // 0 means no time limit (the default).
+      const requestedLimit = Math.round(Number(body.exam.timeLimitMinutes) || 0);
+      const limit = requestedLimit > 0 ? Math.max(5, Math.min(240, requestedLimit)) : 0;
 
       const savedExam = await academyRestFetch('lessons?on_conflict=id', {
         method: 'POST',

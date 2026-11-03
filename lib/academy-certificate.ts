@@ -10,7 +10,19 @@ export type CertificateSvgPayload = {
   certificateTitle: string;
   certificateNumber: string;
   issuedDate: string;
+  /** Who signs the certificate: the instructor of the course (the team founder by default). */
+  instructorName?: string;
+  instructorTitle?: string;
 };
+
+export const DEFAULT_SIGNER_NAME = 'Monir El Azzouzi';
+export const DEFAULT_SIGNER_TITLE = 'Founder and CEO, Lead Regulatory Consultant';
+
+function certificateSigner({ instructorName, instructorTitle }: CertificateSvgPayload) {
+  const name = instructorName?.trim();
+  if (!name) return { name: DEFAULT_SIGNER_NAME, title: DEFAULT_SIGNER_TITLE };
+  return { name, title: instructorTitle?.trim() || 'Instructor' };
+}
 
 function escapeXml(value: string) {
   return value
@@ -140,7 +152,11 @@ export function buildCertificatePdfBlob({
   certificateTitle,
   certificateNumber,
   issuedDate,
+  instructorName,
+  instructorTitle,
 }: CertificateSvgPayload) {
+  const signer = certificateSigner({ learnerName, courseTitle, certificateTitle, certificateNumber, issuedDate, instructorName, instructorTitle });
+  const signerNameSize = Math.min(17, 190 / Math.max(toPdfAscii(signer.name).length * 0.42, 1));
   const circle = (cx: number, cy: number, r: number, op: 'f' | 'S') => {
     const k = r * 0.5523;
     const p = (n: number) => n.toFixed(2);
@@ -205,10 +221,10 @@ export function buildCertificatePdfBlob({
     '0.427 0.157 0.851 rg',
     pdfText({ text: 'SCAN TO VERIFY', x: 421, y: 40, size: 6.5, font: 'F2', align: 'center' }),
     '0.231 0.027 0.392 rg',
-    pdfText({ text: 'Monir El Azzouzi', x: 762, y: 92, size: 17, font: 'F3', align: 'right' }),
+    pdfText({ text: signer.name, x: 762, y: 92, size: signerNameSize, font: 'F3', align: 'right' }),
     '0.486 0.227 0.929 RG 1.2 w 622 83 m 762 83 l S',
     '0.200 0.251 0.333 rg',
-    pdfText({ text: 'Founder and CEO, Lead Regulatory Consultant', x: 762, y: 70, size: 8, font: 'F2', align: 'right' }),
+    pdfText({ text: signer.title.slice(0, 70), x: 762, y: 70, size: 8, font: 'F2', align: 'right' }),
   ].join('\n');
 
   const objects = [
@@ -247,9 +263,13 @@ export function buildCertificateSvg(
     certificateTitle,
     certificateNumber,
     issuedDate,
+    instructorName,
+    instructorTitle,
   }: CertificateSvgPayload,
   fontCss = '',
 ) {
+  const signer = certificateSigner({ learnerName, courseTitle, certificateTitle, certificateNumber, issuedDate, instructorName, instructorTitle });
+  const signerNameSize = Math.min(64, Math.floor(500 / Math.max(signer.name.length * 0.42, 1)));
   const courseLines = splitSvgText(courseTitle, 52).slice(0, 2);
   const titleText = splitSvgText(certificateTitle, 60)[0]?.toUpperCase() || '';
   const titleY = 626 + (courseLines.length - 1) * 46 + 54;
@@ -308,9 +328,9 @@ export function buildCertificateSvg(
     <line x1="904" y1="921" x2="964" y2="921" stroke="url(#gold)" stroke-width="2"/>
     <text x="800" y="926" text-anchor="middle" font-size="13" font-weight="700" letter-spacing="4" fill="#6d28d9">SCAN TO VERIFY</text>
 
-    <text x="1410" y="858" text-anchor="end" font-family="'Great Vibes', 'Brush Script MT', cursive" font-size="64" fill="#3b0764">Monir El Azzouzi</text>
+    <text x="1410" y="858" text-anchor="end" font-family="'Great Vibes', 'Brush Script MT', cursive" font-size="${signerNameSize}" fill="#3b0764">${escapeXml(signer.name)}</text>
     <line x1="1130" y1="874" x2="1410" y2="874" stroke="#7c3aed" stroke-width="2.5"/>
-    <text x="1410" y="902" text-anchor="end" font-size="15" font-weight="600" fill="#334155">Founder and CEO, Lead Regulatory Consultant</text>
+    <text x="1410" y="902" text-anchor="end" font-size="15" font-weight="600" fill="#334155">${escapeXml(signer.title.slice(0, 56))}</text>
   </g>
 </svg>`;
 }

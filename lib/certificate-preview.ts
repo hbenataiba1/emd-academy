@@ -9,7 +9,7 @@ export async function ensureCertificatePreview(payload: CertificateSvgPayload, f
   const session = getStoredAcademySession();
   if (!session || !payload.certificateNumber) return false;
 
-  const key = `emd-cert-preview:${payload.certificateNumber}:${payload.learnerName}`;
+  const key = `emd-cert-preview:${payload.certificateNumber}:${payload.learnerName}:${payload.instructorName || ''}`;
   try {
     if (!force && window.localStorage.getItem(key) === '1') return true;
   } catch {
