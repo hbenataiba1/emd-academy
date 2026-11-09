@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Award, Check, Copy, Download, ExternalLink, LoaderCircle, Share2, Sparkles, X } from 'lucide-react';
+import { Award, Check, Copy, Download, ExternalLink, LoaderCircle, Megaphone, MessageCircle, Send, Share2, Sparkles, Star, X } from 'lucide-react';
 
 import { openLinkedInCertificate } from '@/lib/academy-certificate';
 import { ensureCertificatePreview } from '@/lib/certificate-preview';
+import { getAcademyAuthHeader, getStoredAcademySession } from '@/lib/academy-session';
 import { LINKEDIN_POST_COUNT, buildLinkedInPost } from '@/lib/linkedin-posts';
 
 function shuffled(from: number[]) {
@@ -54,6 +55,13 @@ export function LinkedInShareDialog({
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [preview, setPreview] = useState<'idle' | 'preparing' | 'ready' | 'failed'>('idle');
+  // Optional: the learner sends us the link of their published post.
+  const [postLink, setPostLink] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [sendState, setSendState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  const [sendMessage, setSendMessage] = useState('');
+  const [nudge, setNudge] = useState(false);
+  const shareBoxRef = useRef<HTMLDivElement | null>(null);
   const deck = useRef<number[]>([]);
   const current = useRef(0);
   const timers = useRef<number[]>([]);
@@ -78,6 +86,11 @@ export function LinkedInShareDialog({
     setText(buildLinkedInPost({ courseTitle, certificateNumber, index: order[0] }));
     setCopied(false);
     setGenerating(false);
+    setPostLink('');
+    setConsent(false);
+    setSendState('idle');
+    setSendMessage('');
+    setNudge(false);
     return stopTimers;
   }, [open, courseTitle, certificateNumber, stopTimers]);
 
@@ -156,6 +169,27 @@ export function LinkedInShareDialog({
     }
   }
 
+  async function sendPostToUs() {
+    const session = getStoredAcademySession();
+    if (!session || sendState === 'sending') return;
+
+    setSendState('sending');
+    setSendMessage('');
+    try {
+      const response = await fetch('/api/academy/community-submit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...getAcademyAuthHeader(session) },
+        body: JSON.stringify({ linkedinUrl: postLink, certificateNumber, consent }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      setSendMessage(payload.message || (response.ok ? 'Thank you!' : 'Your post could not be sent.'));
+      setSendState(response.ok ? 'done' : 'error');
+    } catch {
+      setSendMessage('Network error. Please try again.');
+      setSendState('error');
+    }
+  }
+
   async function post() {
     await copy();
     window.open(
@@ -163,6 +197,9 @@ export function LinkedInShareDialog({
       '_blank',
       'noopener,noreferrer',
     );
+    // Back in the Academy after posting: lead the learner to the "share with us" box.
+    setNudge(true);
+    window.setTimeout(() => shareBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 400);
   }
 
   // Shown on the page itself (not inside the card that opened it), so a card effect can not move it.
@@ -239,6 +276,80 @@ export function LinkedInShareDialog({
           </button>
         </div>
 
+        <div
+          ref={shareBoxRef}
+          className={`mt-4 overflow-hidden rounded-2xl bg-gradient-to-br from-[#3b0764] to-[#7c3aed] p-5 text-white shadow-lg transition ${
+            nudge && sendState !== 'done' ? 'ring-4 ring-[#34d4c6]' : ''
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white/15">
+              <Megaphone className="size-5 text-[#34d4c6]" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-base font-black">Share it with us!</p>
+              <p className="mt-0.5 text-sm leading-5 text-[#e2d8ff]">
+                Send us the link of your post, so we can comment on it and show it on our website.
+              </p>
+            </div>
+          </div>
+
+          {sendState === 'done' ? (
+            <p className="mt-4 flex items-start gap-2 rounded-xl bg-white/10 p-3 text-sm font-semibold">
+              <Check className="mt-0.5 size-4 shrink-0 text-[#34d4c6]" aria-hidden="true" /> {sendMessage}
+            </p>
+          ) : (
+            <>
+              <ul className="mt-3 space-y-1.5 text-xs font-semibold text-[#efe8ff]">
+                <li className="flex items-center gap-2">
+                  <MessageCircle className="size-4 text-[#34d4c6]" aria-hidden="true" /> We comment on your post
+                </li>
+                <li className="flex items-center gap-2">
+                  <Star className="size-4 text-[#34d4c6]" aria-hidden="true" /> You can appear on the Academy home page
+                </li>
+              </ul>
+
+              {nudge ? (
+                <p className="mt-3 rounded-lg bg-[#34d4c6] px-3 py-2 text-xs font-black text-[#06352f]">
+                  Posted? Paste the link of your post here.
+                </p>
+              ) : null}
+
+              <input
+                type="url"
+                value={postLink}
+                onChange={(event) => setPostLink(event.target.value)}
+                placeholder="https://www.linkedin.com/posts/..."
+                className="mt-3 h-11 w-full rounded-lg border-0 bg-white px-3 text-sm text-[#191625] outline-none focus:ring-4 focus:ring-[#34d4c6]/60"
+              />
+              <p className="mt-1.5 text-[11px] leading-4 text-[#cdbdf3]">
+                On LinkedIn: click the three dots on your post, then Copy link to post.
+              </p>
+              <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#efe8ff]">
+                <input
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(event) => setConsent(event.target.checked)}
+                  className="mt-1"
+                />
+                I agree that Easy Medical Device Academy may show my LinkedIn post and my name on its website, after review.
+              </label>
+              {sendState === 'error' ? (
+                <p className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#c0264b]">{sendMessage}</p>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void sendPostToUs()}
+                disabled={!postLink.trim() || !consent || sendState === 'sending'}
+                className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#34d4c6] px-5 text-sm font-black text-[#06352f] transition hover:bg-[#2bc2b4] disabled:opacity-50"
+              >
+                {sendState === 'sending' ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />}
+                Send it to Easy Medical Device Academy
+              </button>
+            </>
+          )}
+        </div>
+
         <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#6e687d]">
           {preview === 'preparing' ? (
             <>
@@ -253,6 +364,7 @@ export function LinkedInShareDialog({
 
         <p className="mt-2 text-xs leading-5 text-[#6e687d]">
           LinkedIn opens with this text in a new post. If the box is empty, just paste it: the text is already copied.
+          To tag us, click <strong>@Easy Medical Device</strong> in the post and pick our company page.
         </p>
 
         <div className="mt-5 grid gap-2 border-t border-[#ede8fb] pt-4 sm:grid-cols-2">

@@ -10,7 +10,7 @@ Verify my certificate: {link}
 
   `Today I closed a chapter and opened a new one 📖
 
-I completed "{course}" and passed the final exam. Now it is time to put it into practice.
+I completed "{course}" at Easy Medical Device Academy and passed the final exam. Now it is time to put it into practice.
 
 Certificate: {link}
 
@@ -60,7 +60,7 @@ Proof: {link}
 
   `If you are new to medical device regulation, don't be intimidated. 💬
 
-I just completed "{course}" and the way it explains each topic step by step really helped.
+I just completed "{course}" at Easy Medical Device Academy and the way it explains each topic step by step really helped.
 
 My certificate: {link}
 
@@ -76,7 +76,7 @@ Verify it here: {link}
 
   `A quick thank you 🙏
 
-To everyone who encouraged me to finish "{course}": it's done, and I passed the final exam!
+To everyone who encouraged me to finish "{course}" at Easy Medical Device Academy: it's done, and I passed the final exam!
 
 Certificate: {link}
 
@@ -92,7 +92,7 @@ Verify: {link}
 
   `Hello LinkedIn, I have news 📢
 
-I am now certified in "{course}"! The course was practical and the final exam was a real test of what I learned.
+I am now certified in "{course}" at Easy Medical Device Academy! The course was practical and the final exam was a real test of what I learned.
 
 Check the certificate here: {link}
 
@@ -300,7 +300,7 @@ Verify it: {link}
 
   `Knowledge shared is knowledge multiplied 🔁
 
-I just completed "{course}" and I'm happy to discuss it with anyone working in medical devices.
+I just completed "{course}" at Easy Medical Device Academy and I'm happy to discuss it with anyone working in medical devices.
 
 My certificate: {link}
 

@@ -198,6 +198,17 @@ See it here: {link}
 
 const TEMPLATES: string[] = [...BASE_TEMPLATES, ...MORE_LINKEDIN_POSTS];
 
+// Every post says "Easy Medical Device Academy from @Easy Medical Device", so the learner
+// can tag the company page when the post is open in LinkedIn.
+const ACADEMY_NAME = 'Easy Medical Device Academy';
+const ACADEMY_WITH_TAG = `${ACADEMY_NAME} from @Easy Medical Device`;
+
+function withCompanyTag(text: string) {
+  const index = text.indexOf(ACADEMY_NAME);
+  if (index === -1) return `${text}\n\n${ACADEMY_WITH_TAG}`;
+  return text.slice(0, index) + ACADEMY_WITH_TAG + text.slice(index + ACADEMY_NAME.length);
+}
+
 /** How many posts there are to choose from. */
 export const LINKEDIN_POST_COUNT = TEMPLATES.length;
 
@@ -212,7 +223,7 @@ export function buildLinkedInPost({
   index?: number;
 }) {
   const template = TEMPLATES[((index % TEMPLATES.length) + TEMPLATES.length) % TEMPLATES.length];
-  return template
+  return withCompanyTag(template)
     .replaceAll('{course}', courseTitle)
     .replaceAll('{link}', getCertificateVerifyUrl(certificateNumber));
 }

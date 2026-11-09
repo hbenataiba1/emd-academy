@@ -19,6 +19,33 @@ export function isSafeLinkedInEmbedUrl(url?: string | null): url is string {
   return Boolean(url && url.startsWith(LINKEDIN_EMBED_PREFIX));
 }
 
+// The link a learner pastes: a normal post link, or pasted embed code. Returns the LinkedIn
+// address only (the same rule the CRM uses when the team adds a post).
+export function extractLinkedInPostUrl(input: string): string {
+  const text = String(input || '').trim();
+  const src = text.match(/src="([^"]+)"/i);
+  const candidate = (src ? src[1] : text).trim();
+  const url = candidate.match(/https?:\/\/[^\s"'<>]+/i);
+  return url ? url[0] : candidate;
+}
+
+// Builds LinkedIn's own embed address from a post link, so the post can be shown as it is on LinkedIn.
+export function parseLinkedInEmbedUrl(input: string): string | null {
+  const text = String(input || '').trim();
+  if (!text) return null;
+
+  const embedSrc = text.match(/https:\/\/www\.linkedin\.com\/embed\/feed\/update\/urn:li:(?:activity|share|ugcPost):\d+/i);
+  if (embedSrc) return embedSrc[0];
+
+  const urn = text.match(/urn:li:(activity|share|ugcPost):(\d{10,})/i);
+  if (urn) return `${LINKEDIN_EMBED_PREFIX}urn:li:${urn[1]}:${urn[2]}`;
+
+  const slug = text.match(/[-/](activity|share|ugcPost)[-:](\d{10,})/i);
+  if (slug) return `${LINKEDIN_EMBED_PREFIX}urn:li:${slug[1]}:${slug[2]}`;
+
+  return null;
+}
+
 export async function getPublishedCommunityPosts(): Promise<CommunityPost[]> {
   const supabaseUrl = cleanEnv(
     process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
