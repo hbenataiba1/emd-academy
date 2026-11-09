@@ -19,11 +19,10 @@ export async function POST(request: Request) {
   const body = await readJson<{ linkedinUrl?: string; certificateNumber?: string }>(request, {});
 
   const linkedinUrl = extractLinkedInPostUrl(String(body.linkedinUrl || '')).slice(0, 600);
-  if (!/^https:\/\/([a-z0-9-]+\.)?linkedin\.com\//i.test(linkedinUrl)) {
-    return json(
-      { message: 'Paste the link of your post from linkedin.com (on LinkedIn: three dots on your post, then Copy link to post).' },
-      400,
-    );
+  // Any link is accepted (the team corrects it in the CRM if needed). It only has to be a web
+  // address, because the link becomes clickable on the website.
+  if (!/^https?:\/\/[^\s]+$/i.test(linkedinUrl)) {
+    return json({ message: 'Please paste the link of your post.' }, 400);
   }
 
   // Only a learner who owns a certificate can send a post about it.

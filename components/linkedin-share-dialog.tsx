@@ -212,7 +212,7 @@ export function LinkedInShareDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="linkedin-share-title"
-        className="relative my-auto w-full max-w-xl rounded-2xl bg-white p-6 text-[#191625] shadow-2xl"
+        className="relative my-auto w-full max-w-4xl rounded-2xl bg-white p-6 text-[#191625] shadow-2xl"
       >
         <button
           type="button"
@@ -235,13 +235,15 @@ export function LinkedInShareDialog({
           </div>
         </div>
 
+        <div className="mt-5 grid items-start gap-6 md:grid-cols-2">
+          <div className="min-w-0">
         <textarea
           value={text}
           onChange={(event) => setText(event.target.value)}
           rows={11}
           readOnly={generating}
           placeholder={generating ? 'Writing your post...' : undefined}
-          className="mt-5 w-full rounded-xl border border-[#d9d1ee] bg-[#faf8ff] p-4 text-sm leading-6 outline-none focus:border-[#0a66c2] focus:ring-4 focus:ring-[#0a66c2]/10"
+          className="w-full rounded-xl border border-[#d9d1ee] bg-[#faf8ff] p-4 text-sm leading-6 outline-none focus:border-[#0a66c2] focus:ring-4 focus:ring-[#0a66c2]/10"
         />
 
         <button
@@ -274,9 +276,28 @@ export function LinkedInShareDialog({
           </button>
         </div>
 
+        <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#6e687d]">
+          {preview === 'preparing' ? (
+            <>
+              <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> Preparing your certificate preview...
+            </>
+          ) : preview === 'ready' ? (
+            <>
+              <Check className="size-3.5 text-[#0f8a5f]" aria-hidden="true" /> Your certificate will appear in the LinkedIn post.
+            </>
+          ) : null}
+        </p>
+
+        <p className="mt-2 text-xs leading-5 text-[#6e687d]">
+          LinkedIn opens with this text in a new post. If the box is empty, just paste it: the text is already copied.
+          To tag us, click <strong>@Easy Medical Device</strong> in the post and pick our company page.
+        </p>
+
+          </div>
+          <div className="min-w-0 space-y-4">
         <div
           ref={shareBoxRef}
-          className={`mt-4 overflow-hidden rounded-2xl bg-gradient-to-br from-[#3b0764] to-[#7c3aed] p-5 text-white shadow-lg transition ${
+          className={`overflow-hidden rounded-2xl bg-gradient-to-br from-[#3b0764] to-[#7c3aed] p-5 text-white shadow-lg transition ${
             nudge && sendState !== 'done' ? 'ring-4 ring-[#34d4c6]' : ''
           }`}
         >
@@ -339,24 +360,7 @@ export function LinkedInShareDialog({
           )}
         </div>
 
-        <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#6e687d]">
-          {preview === 'preparing' ? (
-            <>
-              <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> Preparing your certificate preview...
-            </>
-          ) : preview === 'ready' ? (
-            <>
-              <Check className="size-3.5 text-[#0f8a5f]" aria-hidden="true" /> Your certificate will appear in the LinkedIn post.
-            </>
-          ) : null}
-        </p>
-
-        <p className="mt-2 text-xs leading-5 text-[#6e687d]">
-          LinkedIn opens with this text in a new post. If the box is empty, just paste it: the text is already copied.
-          To tag us, click <strong>@Easy Medical Device</strong> in the post and pick our company page.
-        </p>
-
-        <div className="mt-5 grid gap-2 border-t border-[#ede8fb] pt-4 sm:grid-cols-2">
+        <div className="grid gap-2 border-t border-[#ede8fb] pt-4">
           {onDownload ? (
             <button
               type="button"
@@ -373,6 +377,8 @@ export function LinkedInShareDialog({
           >
             <Award className="size-4" aria-hidden="true" /> Add it to my profile (Licenses &amp; certifications)
           </button>
+        </div>
+          </div>
         </div>
       </div>
     </div>,
