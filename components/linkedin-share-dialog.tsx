@@ -57,7 +57,6 @@ export function LinkedInShareDialog({
   const [preview, setPreview] = useState<'idle' | 'preparing' | 'ready' | 'failed'>('idle');
   // Optional: the learner sends us the link of their published post.
   const [postLink, setPostLink] = useState('');
-  const [consent, setConsent] = useState(false);
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [sendMessage, setSendMessage] = useState('');
   const [nudge, setNudge] = useState(false);
@@ -87,7 +86,6 @@ export function LinkedInShareDialog({
     setCopied(false);
     setGenerating(false);
     setPostLink('');
-    setConsent(false);
     setSendState('idle');
     setSendMessage('');
     setNudge(false);
@@ -179,7 +177,7 @@ export function LinkedInShareDialog({
       const response = await fetch('/api/academy/community-submit', {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...getAcademyAuthHeader(session) },
-        body: JSON.stringify({ linkedinUrl: postLink, certificateNumber, consent }),
+        body: JSON.stringify({ linkedinUrl: postLink, certificateNumber }),
       });
       const payload = (await response.json().catch(() => ({}))) as { message?: string };
       setSendMessage(payload.message || (response.ok ? 'Thank you!' : 'Your post could not be sent.'));
@@ -325,22 +323,13 @@ export function LinkedInShareDialog({
               <p className="mt-1.5 text-[11px] leading-4 text-[#cdbdf3]">
                 On LinkedIn: click the three dots on your post, then Copy link to post.
               </p>
-              <label className="mt-3 flex items-start gap-2 text-xs leading-5 text-[#efe8ff]">
-                <input
-                  type="checkbox"
-                  checked={consent}
-                  onChange={(event) => setConsent(event.target.checked)}
-                  className="mt-1"
-                />
-                I agree that Easy Medical Device Academy may show my LinkedIn post and my name on its website, after review.
-              </label>
               {sendState === 'error' ? (
                 <p className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#c0264b]">{sendMessage}</p>
               ) : null}
               <button
                 type="button"
                 onClick={() => void sendPostToUs()}
-                disabled={!postLink.trim() || !consent || sendState === 'sending'}
+                disabled={!postLink.trim() || sendState === 'sending'}
                 className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#34d4c6] px-5 text-sm font-black text-[#06352f] transition hover:bg-[#2bc2b4] disabled:opacity-50"
               >
                 {sendState === 'sending' ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />}

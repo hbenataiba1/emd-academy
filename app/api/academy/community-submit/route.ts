@@ -16,11 +16,7 @@ export async function POST(request: Request) {
   const user = await getAcademyUserFromRequest(request);
   if (!user?.id) return json({ message: 'Please log in to continue.' }, 401);
 
-  const body = await readJson<{ linkedinUrl?: string; certificateNumber?: string; consent?: boolean }>(request, {});
-
-  if (body.consent !== true) {
-    return json({ message: 'Please agree that we may show your post on our website.' }, 400);
-  }
+  const body = await readJson<{ linkedinUrl?: string; certificateNumber?: string }>(request, {});
 
   const linkedinUrl = extractLinkedInPostUrl(String(body.linkedinUrl || '')).slice(0, 600);
   if (!/^https:\/\/([a-z0-9-]+\.)?linkedin\.com\//i.test(linkedinUrl)) {
