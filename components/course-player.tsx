@@ -55,6 +55,7 @@ import {
   getCurriculumForCourse,
 } from '@/lib/curriculum-data';
 import { useCertificatePreviewUrl } from '@/lib/use-certificate-preview';
+import { cleanCertificateName } from '@/lib/certificate-name';
 import { ArticleBody } from '@/components/article-body';
 import { getVideoEmbedUrl, isVideoEmbedUrl } from '@/lib/video-embed';
 import { LessonComments } from '@/components/lesson-comments';
@@ -134,6 +135,8 @@ type QuizMeta = {
 };
 
 type IssuedCertificate = {
+  /** The name the learner confirmed (older certificates have none). */
+  learner_name?: string | null;
   certificate_number?: string;
   issued_at?: string;
   instructor_name?: string;
@@ -504,7 +507,7 @@ export function CoursePlayer({
   const [certificateError, setCertificateError] = useState('');
   const certificateRequested = useRef('');
 
-  const requestCertificate = async (force = false) => {
+  const requestCertificate = async (force = false, confirmedName?: string) => {
     const session = academySession || getStoredAcademySession();
     if (!session || !activeLesson) return;
 
@@ -526,6 +529,7 @@ export function CoursePlayer({
           courseId,
           lessonId: activeLesson.id,
           examPassed: true,
+          learnerName: confirmedName,
         }),
       });
       const raw = await response.text();
@@ -555,16 +559,26 @@ export function CoursePlayer({
     }
   };
 
-  useEffect(() => {
-    if (quizCertificateReady && !issuedCertificate?.certificate_number) {
-      void requestCertificate();
+  // Before the certificate is created the learner confirms (or corrects) the name printed on it.
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [nameError, setNameError] = useState('');
+
+  const confirmCertificateName = () => {
+    const result = cleanCertificateName(nameDraft ?? learnerName);
+    if (!result.ok) {
+      setNameError(result.error);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quizCertificateReady, issuedCertificate, activeLesson?.id]);
+    setNameError('');
+    void requestCertificate(true, result.name);
+  };
+
+  // The name on the certificate: the one confirmed by the learner (kept on the certificate).
+  const certificateLearnerName = issuedCertificate?.learner_name || learnerName;
 
   const certificatePreviewUrl = useCertificatePreviewUrl(
     {
-      learnerName,
+      learnerName: certificateLearnerName,
       courseTitle: curriculum.title,
       certificateTitle: quizMeta.certificateTitle,
       certificateNumber,
@@ -1044,7 +1058,7 @@ export function CoursePlayer({
 
   const downloadCertificate = () => {
     downloadCertificatePdf({
-      learnerName,
+      learnerName: certificateLearnerName,
       courseTitle: curriculum.title,
       certificateTitle: quizMeta.certificateTitle,
       certificateNumber,
@@ -1418,7 +1432,7 @@ export function CoursePlayer({
                             Exam passed
                           </p>
                           <h1 className="mt-2 text-2xl font-black text-white sm:text-4xl">
-                            {certificateNumber ? 'Your certificate is ready' : 'Preparing your certificate...'}
+                            {certificateNumber ? 'Your certificate is ready' : 'Almost there: confirm your name'}
                           </h1>
                           {certificateNumber ? (
                             <p className="mt-2 text-sm text-[#b8b0cf]">
@@ -1473,25 +1487,45 @@ export function CoursePlayer({
                         </div>
                       </div>
                       ) : (
-                        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
-                          {certificateStatus === 'error' ? (
+                        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+                          {certificateStatus === 'loading' ? (
+                            <p className="text-center text-sm font-semibold text-[#c4bdd8]">
+                              Creating your certificate so it can be verified. One moment...
+                            </p>
+                          ) : (
                             <>
-                              <p className="text-sm font-bold text-[#ffb4b4]">
-                                We could not register your certificate yet.
+                              <label htmlFor="certificate-name" className="block text-sm font-black text-white">
+                                Name on your certificate
+                              </label>
+                              <p className="mt-1 text-xs leading-5 text-[#c4bdd8]">
+                                This is the name printed on your certificate. Check the spelling and change it if you
+                                like. You cannot change it after the certificate is created.
                               </p>
-                              <p className="mt-1 text-xs text-[#c4bdd8]">{certificateError}</p>
+                              <input
+                                id="certificate-name"
+                                value={nameDraft ?? learnerName}
+                                onChange={(event) => {
+                                  setNameDraft(event.target.value);
+                                  setNameError('');
+                                }}
+                                maxLength={60}
+                                autoComplete="name"
+                                className="mt-3 h-12 w-full rounded-lg border border-white/20 bg-[#0e0a18] px-4 text-lg font-semibold text-white outline-none focus:border-[#34d4c6]"
+                              />
+                              {nameError || certificateStatus === 'error' ? (
+                                <p className="mt-2 text-sm font-semibold text-[#ffb4b4]">
+                                  {nameError || certificateError || 'We could not create your certificate yet.'}
+                                </p>
+                              ) : null}
                               <button
                                 type="button"
-                                onClick={() => void requestCertificate(true)}
-                                className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-[#7c3aed] px-5 text-sm font-bold text-white transition hover:bg-[#6d31dc]"
+                                onClick={confirmCertificateName}
+                                className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#34d4c6] px-6 text-sm font-black text-[#08110f] transition hover:bg-[#5ee7dc]"
                               >
-                                Try again
+                                <Award className="size-4" />
+                                Confirm and create my certificate
                               </button>
                             </>
-                          ) : (
-                            <p className="text-sm font-semibold text-[#c4bdd8]">
-                              Registering your certificate so it can be verified. One moment...
-                            </p>
                           )}
                         </div>
                       )}
@@ -2821,7 +2855,7 @@ export function CoursePlayer({
         certificateTitle={quizMeta.certificateTitle}
         certificateNumber={certificateNumber}
         issuedAt={issuedCertificate?.issued_at}
-        learnerName={learnerName}
+        learnerName={certificateLearnerName}
         issuedDate={certificateIssuedDate}
         instructorName={issuedCertificate?.instructor_name}
         instructorTitle={issuedCertificate?.instructor_title}

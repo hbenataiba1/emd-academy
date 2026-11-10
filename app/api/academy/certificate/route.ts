@@ -5,6 +5,7 @@ import {
   academyRestFetch,
   getAcademyCourseForAccess,
   getAcademyEnrollmentForUser,
+  getAcademyDisplayName,
   getAcademyUserFromRequest,
   isFreeCourse,
   json,
@@ -16,12 +17,15 @@ import {
   isEligibleForCertificate,
 } from '@/lib/academy-certificates';
 import { saveLessonProgress } from '@/lib/academy-progress';
+import { cleanCertificateName } from '@/lib/certificate-name';
 
 type CertificateBody = {
   courseId?: string;
   /** The exam lesson the learner has just passed. */
   lessonId?: string;
   examPassed?: boolean;
+  /** The name the learner confirmed for the certificate (used only when it is created). */
+  learnerName?: string;
 };
 
 // Returns the learner's certificate record for a course, creating it when they
@@ -98,7 +102,15 @@ async function handleCertificateRequest(request: Request) {
       );
     }
 
-    const certificate = await ensureCertificate(user.id, body.courseId);
+    // The certificate carries the name the learner confirmed (the account name if none was sent).
+    let certificateName = getAcademyDisplayName(user);
+    if (body.learnerName !== undefined) {
+      const cleaned = cleanCertificateName(body.learnerName);
+      if (!cleaned.ok) return json({ message: cleaned.error }, 400);
+      certificateName = cleaned.name;
+    }
+
+    const certificate = await ensureCertificate(user.id, body.courseId, certificateName);
 
     // Only a certificate issued just now sends the email (old ones are skipped inside).
     const course = await getAcademyCourseForAccess(body.courseId);

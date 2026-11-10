@@ -6,6 +6,8 @@ export type CertificateRecord = {
   certificate_number: string;
   issued_at: string;
   course_id: string;
+  /** The name the learner confirmed (certificates issued before that have none). */
+  learner_name?: string | null;
 };
 
 export type CertificateSigner = {
@@ -70,10 +72,18 @@ export function buildCertificateNumber(
 }
 
 export async function findCertificate(userId: string, courseId: string) {
-  const response = await academyRestFetch(
-    `certificates?select=certificate_number,issued_at,course_id&user_id=eq.${encodeURIComponent(userId)}&course_id=eq.${encodeURIComponent(courseId)}&limit=1`,
+  const filter = `user_id=eq.${encodeURIComponent(userId)}&course_id=eq.${encodeURIComponent(courseId)}&limit=1`;
+  let response = await academyRestFetch(
+    `certificates?select=certificate_number,issued_at,course_id,learner_name&${filter}`,
     { useServiceRole: true },
   );
+  if (!response.ok) {
+    // The learner_name column does not exist yet (supabase/certificate_names.sql): read without it.
+    response = await academyRestFetch(
+      `certificates?select=certificate_number,issued_at,course_id&${filter}`,
+      { useServiceRole: true },
+    );
+  }
 
   if (!response.ok) {
     throw new Error(await response.text());
@@ -117,21 +127,37 @@ export async function isEligibleForCertificate(userId: string, courseId: string)
   return lessons.every((lesson) => done.has(String(lesson.id)));
 }
 
-/** Creates the certificate record if it does not exist yet, and returns it. */
-export async function ensureCertificate(userId: string, courseId: string) {
+/**
+ * Creates the certificate record if it does not exist yet, and returns it. The name the learner
+ * confirmed is saved with it; an existing certificate keeps the name it was created with.
+ */
+export async function ensureCertificate(userId: string, courseId: string, learnerName?: string) {
   const existing = await findCertificate(userId, courseId);
   if (existing) return existing;
 
-  const insert = await academyRestFetch('certificates', {
-    method: 'POST',
-    body: JSON.stringify({
-      user_id: userId,
-      course_id: courseId,
-      certificate_number: buildCertificateNumber(userId, courseId),
-    }),
-    prefer: 'return=representation',
-    useServiceRole: true,
-  });
+  const base = {
+    user_id: userId,
+    course_id: courseId,
+    certificate_number: buildCertificateNumber(userId, courseId),
+  };
+  const post = (body: Record<string, unknown>) =>
+    academyRestFetch('certificates', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      prefer: 'return=representation',
+      useServiceRole: true,
+    });
+
+  let insert = await post(learnerName ? { ...base, learner_name: learnerName } : base);
+
+  if (!insert.ok && learnerName) {
+    // Another request may have created it a moment ago.
+    const raced = await findCertificate(userId, courseId).catch(() => null);
+    if (raced) return raced;
+
+    // The learner_name column does not exist yet: the certificate still works, with the account name.
+    insert = await post(base);
+  }
 
   if (!insert.ok) {
     // Another request may have created it a moment ago.

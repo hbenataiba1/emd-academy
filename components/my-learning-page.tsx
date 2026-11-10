@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -20,6 +21,7 @@ import {
 
 import { AcademyFooter, AcademyHeader } from '@/components/academy-shell';
 import { LinkedInShareDialog } from '@/components/linkedin-share-dialog';
+import { cleanCertificateName } from '@/lib/certificate-name';
 import { Badge } from '@/components/ui/badge';
 import {
   clearAcademySession,
@@ -53,6 +55,7 @@ type LearningCourse = {
   accent: string;
   status: string;
   certificate?: {
+    learner_name?: string | null;
     certificate_number: string;
     issued_at: string;
     instructor_name?: string;
@@ -179,18 +182,24 @@ function CourseCard({
 }) {
   const done = course.progress === 100;
   const certificateTitle = 'Certificate of Completion';
-  const [ensured, setEnsured] = useState<{ number: string; issuedAt: string; instructorName?: string; instructorTitle?: string } | null>(null);
+  const [ensured, setEnsured] = useState<{ number: string; issuedAt: string; learnerName?: string; instructorName?: string; instructorTitle?: string } | null>(null);
+  // Before the certificate is created the learner confirms the name printed on it.
+  const [nameOpen, setNameOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameError, setNameError] = useState('');
   const [certificateBusy, setCertificateBusy] = useState(false);
   const [certificateError, setCertificateError] = useState('');
   const certificateNumber =
     course.certificate?.certificate_number || ensured?.number || '';
   const issuedAt = course.certificate?.issued_at || ensured?.issuedAt;
+  // The name the learner confirmed (kept on the certificate); the account name for older certificates.
+  const certificateLearnerName = course.certificate?.learner_name || ensured?.learnerName || learnerName;
   const instructorName = course.certificate?.instructor_name || ensured?.instructorName;
   const instructorTitle = course.certificate?.instructor_title || ensured?.instructorTitle;
 
   // Certificates only exist once the server has a record, so the QR code on them
   // can always be verified.
-  const getCertificate = async () => {
+  const getCertificate = async (confirmedName: string) => {
     const session = getStoredAcademySession();
     setCertificateBusy(true);
     setCertificateError('');
@@ -202,10 +211,10 @@ function CourseCard({
           'content-type': 'application/json',
           ...getAcademyAuthHeader(session),
         },
-        body: JSON.stringify({ courseId: course.id }),
+        body: JSON.stringify({ courseId: course.id, learnerName: confirmedName }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
-        certificate?: { certificate_number: string; issued_at: string; instructor_name?: string; instructor_title?: string };
+        certificate?: { certificate_number: string; issued_at: string; learner_name?: string | null; instructor_name?: string; instructor_title?: string };
         message?: string;
       };
 
@@ -219,6 +228,7 @@ function CourseCard({
       setEnsured({
         number: payload.certificate.certificate_number,
         issuedAt: payload.certificate.issued_at,
+        learnerName: payload.certificate.learner_name || undefined,
         instructorName: payload.certificate.instructor_name,
         instructorTitle: payload.certificate.instructor_title,
       });
@@ -229,9 +239,20 @@ function CourseCard({
     }
   };
 
+  const confirmName = async () => {
+    const result = cleanCertificateName(nameDraft);
+    if (!result.ok) {
+      setNameError(result.error);
+      return;
+    }
+    setNameError('');
+    await getCertificate(result.name);
+    setNameOpen(false);
+  };
+
   const downloadCertificate = () =>
     downloadCertificatePdf({
-      learnerName,
+      learnerName: certificateLearnerName,
       courseTitle: course.title,
       certificateTitle,
       certificateNumber,
@@ -250,12 +271,64 @@ function CourseCard({
         certificateTitle={certificateTitle}
         certificateNumber={certificateNumber}
         issuedAt={issuedAt}
-        learnerName={learnerName}
+        learnerName={certificateLearnerName}
         issuedDate={formatCertificateDate(issuedAt)}
         instructorName={instructorName}
         instructorTitle={instructorTitle}
         onDownload={downloadCertificate}
       />
+      {nameOpen && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !certificateBusy) setNameOpen(false);
+              }}
+            >
+              <div role="dialog" aria-modal="true" aria-labelledby="certificate-name-title" className="w-full max-w-md rounded-2xl bg-white p-6 text-[#191625] shadow-2xl">
+                <h2 id="certificate-name-title" className="text-lg font-black">
+                  Name on your certificate
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-[#6e687d]">
+                  This is the name printed on your certificate. Check the spelling and change it if you like. You
+                  cannot change it after the certificate is created.
+                </p>
+                <input
+                  value={nameDraft}
+                  onChange={(event) => {
+                    setNameDraft(event.target.value);
+                    setNameError('');
+                  }}
+                  maxLength={60}
+                  autoComplete="name"
+                  className="mt-4 h-12 w-full rounded-xl border border-[#d9d1ee] px-4 text-base font-semibold outline-none focus:border-[#7c3aed] focus:ring-4 focus:ring-[#7c3aed]/10"
+                />
+                {nameError || certificateError ? (
+                  <p className="mt-2 text-sm font-semibold text-[#c0264b]">{nameError || certificateError}</p>
+                ) : null}
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNameOpen(false)}
+                    disabled={certificateBusy}
+                    className="h-10 rounded-xl border border-[#d9d1ee] px-4 text-sm font-bold text-[#302945] disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void confirmName()}
+                    disabled={certificateBusy}
+                    className="h-10 rounded-xl bg-[#7c3aed] px-5 text-sm font-black text-white transition hover:bg-[#6d31dc] disabled:opacity-60"
+                  >
+                    {certificateBusy ? 'Creating...' : 'Confirm and create'}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
       <div className="relative h-40 overflow-hidden bg-[#f4f0ff]">
         <img
           src={course.image}
@@ -332,7 +405,11 @@ function CourseCard({
               <div className="mt-2">
                 <button
                   type="button"
-                  onClick={getCertificate}
+                  onClick={() => {
+                    setNameDraft(learnerName);
+                    setNameError('');
+                    setNameOpen(true);
+                  }}
                   disabled={certificateBusy}
                   className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-[#067b75] px-2 py-2 text-xs font-bold text-white transition hover:bg-[#056560] disabled:opacity-60"
                 >

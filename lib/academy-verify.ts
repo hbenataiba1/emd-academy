@@ -18,6 +18,7 @@ export type VerifiedCertificate = {
 };
 
 type CertificateRow = {
+  learner_name?: string | null;
   user_id: string;
   course_id: string;
   certificate_number: string;
@@ -37,10 +38,18 @@ export async function lookupCertificate(
   }
 
   try {
-    const response = await academyRestFetch(
-      `certificates?select=user_id,course_id,certificate_number,issued_at,revoked_at&certificate_number=eq.${encodeURIComponent(certificateNumber)}&limit=1`,
+    const filter = `certificate_number=eq.${encodeURIComponent(certificateNumber)}&limit=1`;
+    let response = await academyRestFetch(
+      `certificates?select=user_id,course_id,certificate_number,issued_at,revoked_at,learner_name&${filter}`,
       { useServiceRole: true },
     );
+    if (!response.ok) {
+      // The learner_name column does not exist yet (supabase/certificate_names.sql).
+      response = await academyRestFetch(
+        `certificates?select=user_id,course_id,certificate_number,issued_at,revoked_at&${filter}`,
+        { useServiceRole: true },
+      );
+    }
 
     if (!response.ok) {
       return null;
@@ -53,7 +62,8 @@ export async function lookupCertificate(
 
     const [courseTitle, learnerName, signer] = await Promise.all([
       getCourseTitle(row.course_id),
-      getLearnerName(row.user_id, row.course_id),
+      // The name the learner confirmed; older certificates use the account name.
+      row.learner_name?.trim() ? Promise.resolve(row.learner_name.trim()) : getLearnerName(row.user_id, row.course_id),
       getCertificateSigner(row.course_id),
     ]);
 
