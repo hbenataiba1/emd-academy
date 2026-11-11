@@ -1,9 +1,7 @@
 import Link from 'next/link';
 import {
   ArrowRight,
-  Award,
   BadgeCheck,
-  Building2,
   ClipboardCheck,
   Globe,
   LayoutDashboard,
@@ -16,41 +14,9 @@ import {
 } from 'lucide-react';
 
 import { AcademyFooter, AcademyHeader } from '@/components/academy-shell';
+import { WhyTeachScroller } from '@/components/why-teach-scroller';
 
 const APPLY = '/academy/instructor/apply';
-
-const benefits = [
-  {
-    icon: Globe,
-    title: 'Reach professionals worldwide',
-    text: 'Regulatory, quality and engineering teams come to Easy Medical Device every day. Your course is in front of them.',
-  },
-  {
-    icon: Building2,
-    title: 'Visibility for you and your company',
-    text: 'Your name and your company appear on your course page and in the Academy catalog, in front of regulatory, quality and engineering professionals who may become your clients, partners or future colleagues.',
-  },
-  {
-    icon: LayoutDashboard,
-    title: 'Your own dashboard',
-    text: 'Create and manage your courses, follow your learners and enrollments, and see your reviews in one place.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'We run the platform',
-    text: 'Video hosting, secure payments and automatic emails are included. You focus on teaching.',
-  },
-  {
-    icon: Award,
-    title: 'Certificates, automatically',
-    text: 'When a learner passes the exam of your course, their certificate is generated automatically and can be verified online and shared on LinkedIn. Nothing to do on your side.',
-  },
-  {
-    icon: Wallet,
-    title: 'Earn from every sale',
-    text: 'You earn a share of every enrollment in your courses, and you can see your earnings in your dashboard.',
-  },
-];
 
 const steps = [
   { icon: Send, title: 'Apply', text: 'Tell us about your background and send your LinkedIn profile.' },
@@ -196,20 +162,7 @@ export function AcademyBecomeInstructorPage() {
 
       <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
         <h2 className="text-center text-2xl font-black sm:text-3xl">Why teach with us</h2>
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-6">
-          {benefits.map(({ icon: Icon, title, text }, index) => (
-            <div
-              key={title}
-              className={`rounded-2xl border border-[#e4ddf4] bg-white p-6 shadow-sm lg:col-span-2`}
-            >
-              <span className="flex size-11 items-center justify-center rounded-full bg-[#f4f0ff] text-[#7c3aed]">
-                <Icon className="size-5" aria-hidden="true" />
-              </span>
-              <h3 className="mt-4 text-base font-black">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-[#5f5872]">{text}</p>
-            </div>
-          ))}
-        </div>
+        <WhyTeachScroller />
       </section>
 
       <section id="how-it-works" className="bg-[#f8f6ff] py-14 sm:py-20">

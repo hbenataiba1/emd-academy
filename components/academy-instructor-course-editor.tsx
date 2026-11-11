@@ -24,6 +24,7 @@ import {
 
 import { courseStatusLabel } from '@/components/academy-instructor-courses-page';
 import { useConfirm } from '@/components/confirm-dialog';
+import { InstructorRecordingStudio } from '@/components/instructor-recording-studio';
 import { FormSkeleton } from '@/components/instructor-skeletons';
 import { getAcademyAuthHeader, getStoredAcademySession } from '@/lib/academy-session';
 
@@ -166,6 +167,10 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
   const [notice, setNotice] = useState('');
   const fileTarget = useRef<{ section: string; lesson: string; kind: 'video' | 'resource' | 'presentation' } | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
+  // The recording studio (slides or screen, with the camera in a corner) opened for one lesson.
+  const [studioTarget, setStudioTarget] = useState<{ section: string; lesson: string } | null>(null);
+  // the explanation shown before the studio opens (record one lesson at a time)
+  const [studioIntro, setStudioIntro] = useState<{ section: string; lesson: string } | null>(null);
   const [presentationUrl, setPresentationUrl] = useState('');
   const [presentationProgress, setPresentationProgress] = useState<number | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
@@ -494,6 +499,64 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#fbfbfe] text-[#191625]">
       <input ref={fileInput} type="file" className="hidden" onChange={onFile} />
       {dialog}
+      {studioIntro ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#191625]/60 p-4" role="dialog" aria-modal="true" aria-label="Record one lesson at a time">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <span className="flex size-12 items-center justify-center rounded-full bg-[#f1ebff] text-[#7c3aed]">
+              <Video className="size-6" aria-hidden="true" />
+            </span>
+            <h3 className="mt-4 text-2xl font-black text-[#191625]">Record ONLY this one lesson</h3>
+            <p className="mt-2 text-base leading-7 text-[#302945]">
+              Do <strong>not</strong> record your whole course in one video. Record <strong>one lesson, then stop</strong>.
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 text-center text-sm font-bold">
+              <div className="rounded-xl border-2 border-[#ef4444]/40 bg-[#fff5f5] p-3 text-[#b42323]">
+                <p className="text-2xl">❌</p>
+                <p className="mt-1">One long video with the whole course</p>
+              </div>
+              <div className="rounded-xl border-2 border-[#22c55e]/50 bg-[#f1fbf4] p-3 text-[#166534]">
+                <p className="text-2xl">✅</p>
+                <p className="mt-1">One short video for each lesson</p>
+              </div>
+            </div>
+
+            <p className="mt-5 text-sm font-black uppercase tracking-wide text-[#7c3aed]">What to do</p>
+            <ol className="mt-2 space-y-2 text-base leading-7 text-[#302945]">
+              <li className="flex gap-3"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#7c3aed] text-sm font-black text-white">1</span><span>Record <strong>this lesson only</strong>.</span></li>
+              <li className="flex gap-3"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#7c3aed] text-sm font-black text-white">2</span><span>Click the green button <strong>&quot;Use this video&quot;</strong>. The video is saved in this lesson.</span></li>
+              <li className="flex gap-3"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#7c3aed] text-sm font-black text-white">3</span><span>Go to the <strong>next lesson</strong> and click &quot;Record in the studio&quot; again.</span></li>
+            </ol>
+            <p className="mt-4 rounded-xl bg-[#f7f4ff] px-4 py-3 text-sm leading-6 text-[#5f5872]">
+              You can do one lesson today and the others tomorrow. Short lessons (3 to 10 minutes) are best.
+            </p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setStudioIntro(null)} className="h-11 rounded-xl border border-[#d9d1ee] px-5 text-sm font-bold text-[#302945] hover:border-[#7c3aed]">
+                Cancel
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => {
+                  setStudioTarget(studioIntro);
+                  setStudioIntro(null);
+                }}
+                className="h-11 rounded-xl bg-[#7c3aed] px-6 text-sm font-black text-white hover:bg-[#6d31dc]"
+              >
+                OK, record this lesson
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      <InstructorRecordingStudio
+        open={Boolean(studioTarget)}
+        onClose={() => setStudioTarget(null)}
+        presentationUrl={presentationUrl}
+        onUse={(file) => {
+          if (studioTarget) void runUpload(file, { section: studioTarget.section, lesson: studioTarget.lesson, kind: 'video' });
+        }}
+      />
 
       {/* Top bar */}
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#e4ddf4] bg-white px-4 py-3 sm:px-6">
@@ -839,13 +902,22 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
                                     <p className="mx-auto mt-0.5 max-w-xs truncate text-xs text-[#6e687d] sm:max-w-md">{lesson.videoUrl}</p>
                                   </div>
                                   {editable ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => pickFile(section.key, lesson.key, 'video')}
-                                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#d9d1ee] bg-white px-5 text-sm font-bold text-[#302945] hover:border-[#7c3aed]"
-                                    >
-                                      <Upload className="size-4 text-[#7c3aed]" aria-hidden="true" /> Replace the video
-                                    </button>
+                                    <div className="flex flex-wrap items-center justify-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => pickFile(section.key, lesson.key, 'video')}
+                                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#d9d1ee] bg-white px-5 text-sm font-bold text-[#302945] hover:border-[#7c3aed]"
+                                      >
+                                        <Upload className="size-4 text-[#7c3aed]" aria-hidden="true" /> Replace the video
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setStudioIntro({ section: section.key, lesson: lesson.key })}
+                                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#d9d1ee] bg-white px-5 text-sm font-bold text-[#302945] hover:border-[#7c3aed]"
+                                      >
+                                        <Video className="size-4 text-[#7c3aed]" aria-hidden="true" /> Record it again
+                                      </button>
+                                    </div>
                                   ) : null}
                                 </>
                               ) : (
@@ -861,13 +933,22 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
                                     <p className="mt-1 text-xs text-[#8e879f]">MP4, MOV, M4V or WebM</p>
                                   </div>
                                   {editable ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => pickFile(section.key, lesson.key, 'video')}
-                                      className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#7c3aed] px-6 text-sm font-black text-white transition hover:bg-[#6d31dc]"
-                                    >
-                                      <Upload className="size-4" aria-hidden="true" /> Choose a video file
-                                    </button>
+                                    <div className="flex flex-wrap items-center justify-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => pickFile(section.key, lesson.key, 'video')}
+                                        className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#7c3aed] px-6 text-sm font-black text-white transition hover:bg-[#6d31dc]"
+                                      >
+                                        <Upload className="size-4" aria-hidden="true" /> Choose a video file
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setStudioIntro({ section: section.key, lesson: lesson.key })}
+                                        className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#7c3aed] bg-white px-6 text-sm font-black text-[#6d28d9] transition hover:bg-[#f4f0ff]"
+                                      >
+                                        <Video className="size-4" aria-hidden="true" /> Record in the studio
+                                      </button>
+                                    </div>
                                   ) : null}
                                 </>
                               )}
