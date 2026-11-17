@@ -1,5 +1,6 @@
 'use client';
 
+import { InstructorGuide } from '@/components/instructor-guide';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -248,6 +249,7 @@ export function InstructorShell({ children }: { children: React.ReactNode }) {
                 type="button"
                 onClick={() => void addCourse()}
                 disabled={creatingCourse}
+                data-guide="add-course"
                 className="flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#7c3aed] px-4 text-sm font-black text-white transition hover:bg-[#6d31dc] disabled:opacity-60"
               >
                 {creatingCourse ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Plus className="size-4" aria-hidden="true" />}
@@ -260,6 +262,7 @@ export function InstructorShell({ children }: { children: React.ReactNode }) {
           <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-5">
             {ready ? children : <DashboardContentSkeleton variant="overview" />}
           </main>
+          <InstructorGuide />
         </div>
       )}
     </div>

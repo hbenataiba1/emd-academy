@@ -49,6 +49,7 @@ export type WorkspaceSection =
 type Overview = {
   courses: number;
   published: number;
+  submitted: number;
   enrollments: number;
   learners: number;
   certificates: number;
@@ -631,7 +632,7 @@ function CouponsSection() {
   return (
     <>
       {dialog}
-      <Title title="Coupons" text="Discount codes that work on your courses only." />
+      <Title title="Coupons" text="Discount codes that work on your courses only. When a learner buys with your coupon, you keep 70% of that sale instead of 30%." />
       {!data ? (
         <Loading error={error} />
       ) : data.available === false ? (
@@ -784,7 +785,8 @@ function Stars({ value }: { value: number }) {
 /* ── Earnings ── */
 type EarningsData = {
   available: boolean;
-  commissionPercent: number;
+  instructorSharePercent: number;
+  instructorCouponSharePercent: number;
   hasPaymentDetails?: boolean;
   holdDays: number;
   availableCents: number;
@@ -817,12 +819,85 @@ const STATUS_STYLE = {
 
 const STATUS_LABEL = { pending: 'In waiting period', available: 'Ready to be paid', paid: 'Paid' } as const;
 
+// A clear explanation of the percentages, with a real example
+function EarningsExplainer({ data, onClose }: { data: EarningsData; onClose: () => void }) {
+  const normal = data.instructorSharePercent;
+  const own = data.instructorCouponSharePercent;
+  const price = 100;
+  const discount = 20;
+  const paidWithCoupon = price - discount;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#191625]/60 p-4" role="dialog" aria-modal="true" aria-label="How your earnings are calculated" onClick={onClose}>
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl sm:p-8" onClick={(event) => event.stopPropagation()}>
+        <h3 className="text-2xl font-black text-[#191625]">How your earnings are calculated</h3>
+        <p className="mt-2 text-sm leading-6 text-[#5f5872]">
+          Every time a learner pays for one of your courses, you earn a percentage of <strong>what the learner really paid</strong>. There are only two cases:
+        </p>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border-2 border-[#e4ddf4] bg-[#faf8ff] p-5">
+            <p className="text-xs font-black uppercase tracking-wider text-[#6e687d]">Normal sale</p>
+            <p className="mt-1 text-4xl font-black text-[#191625]">{normal}%</p>
+            <p className="mt-2 text-sm leading-6 text-[#5f5872]">The learner found your course on the Academy and bought it. You keep {normal}% of the price paid.</p>
+          </div>
+          <div className="rounded-2xl border-2 border-[#7c3aed] bg-[#f4f0ff] p-5">
+            <p className="text-xs font-black uppercase tracking-wider text-[#7c3aed]">Sale with YOUR coupon</p>
+            <p className="mt-1 text-4xl font-black text-[#7c3aed]">{own}%</p>
+            <p className="mt-2 text-sm leading-6 text-[#5f5872]">The learner came to you and used a coupon that <strong>you created</strong>. You keep {own}% of the price paid.</p>
+          </div>
+        </div>
+
+        <p className="mt-6 text-sm font-black uppercase tracking-wider text-[#7c3aed]">Example: a course that costs ${price}</p>
+        <div className="mt-2 space-y-2 text-sm leading-6 text-[#302945]">
+          <div className="rounded-xl bg-[#f6f4fb] p-4">
+            <p><strong>Normal sale:</strong> the learner pays ${price}.</p>
+            <p>You earn ${((price * normal) / 100).toFixed(2)} ({normal}% of ${price}).</p>
+          </div>
+          <div className="rounded-xl bg-[#f6f4fb] p-4">
+            <p><strong>Sale with your coupon ({discount}% off):</strong> the learner pays ${paidWithCoupon}.</p>
+            <p>You earn ${((paidWithCoupon * own) / 100).toFixed(2)} ({own}% of ${paidWithCoupon}).</p>
+          </div>
+        </div>
+
+        <ul className="mt-5 space-y-2 text-sm leading-6 text-[#5f5872]">
+          <li className="flex gap-2"><span className="font-black text-[#7c3aed]">&bull;</span><span>The {own}% applies <strong>only</strong> if the coupon was created by you. A coupon from someone else counts as a normal sale ({normal}%).</span></li>
+          <li className="flex gap-2"><span className="font-black text-[#7c3aed]">&bull;</span><span>The percentage is calculated on the amount paid <strong>after</strong> the discount.</span></li>
+          <li className="flex gap-2"><span className="font-black text-[#7c3aed]">&bull;</span><span>A free enrollment (100% coupon) earns nothing, because no money was paid.</span></li>
+          <li className="flex gap-2"><span className="font-black text-[#7c3aed]">&bull;</span><span>Your money is ready {data.holdDays} days after the sale (the time learners have to ask for a refund). A refunded sale is taken back from your balance.</span></li>
+          <li className="flex gap-2"><span className="font-black text-[#7c3aed]">&bull;</span><span>The percentage of each sale is saved when it happens: it never changes later.</span></li>
+        </ul>
+
+        <div className="mt-6 flex justify-end">
+          <button type="button" autoFocus onClick={onClose} className="h-11 rounded-xl bg-[#7c3aed] px-6 text-sm font-black text-white hover:bg-[#6d31dc]">
+            I understand
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EarningsSection() {
   const { data, error } = useApi<EarningsData>('/api/academy/instructor/earnings');
+  const [explain, setExplain] = useState(false);
 
   return (
     <>
       <Title title="Earnings" text="Your sales, what you earn from them, and the payments we send you." />
+      {data && data.available !== false ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setExplain(true)}
+            className="mb-4 inline-flex items-center gap-2 rounded-xl border border-[#d9d1ee] bg-white px-4 py-2.5 text-sm font-bold text-[#6d28d9] transition hover:border-[#7c3aed] hover:bg-[#f4f0ff]"
+          >
+            <span className="flex size-5 items-center justify-center rounded-full bg-[#7c3aed] text-xs font-black text-white">?</span>
+            How are my earnings calculated?
+          </button>
+          {explain ? <EarningsExplainer data={data} onClose={() => setExplain(false)} /> : null}
+        </>
+      ) : null}
       {!data ? (
         <Loading error={error} />
       ) : data.available === false ? (
@@ -858,12 +933,13 @@ function EarningsSection() {
             <div className={`${card} p-5`}>
               <p className="text-xs font-black uppercase tracking-wider text-[#6e687d]">Total sales</p>
               <p className="mt-2 text-3xl font-black">{money(data.salesCents)}</p>
-              <p className="mt-1 text-xs text-[#8e879f]">you keep {100 - data.commissionPercent}% of each sale</p>
+              <p className="mt-1 text-xs text-[#8e879f]">you keep {data.instructorSharePercent}% of each sale, {data.instructorCouponSharePercent}% with your coupon</p>
             </div>
           </div>
 
           <p className="mt-4 rounded-xl bg-[#f6f4fb] p-4 text-xs leading-5 text-[#6e687d]">
-            The Academy keeps {data.commissionPercent}% of each sale and you keep the rest. A sale becomes ready to be
+            You keep {data.instructorSharePercent}% of each sale. When the learner buys with a coupon that you created,
+            you keep {data.instructorCouponSharePercent}% of that sale. A sale becomes ready to be
             paid {data.holdDays} days later, which is the time learners have to ask for a refund. A refunded sale is taken
             back from your balance.
           </p>

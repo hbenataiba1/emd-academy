@@ -1,5 +1,9 @@
 import { academyRestFetch } from '@/lib/academy-auth';
 
+/** What the instructor keeps of a sale (percent): a normal sale, and a sale made with the instructor's own coupon. */
+export const INSTRUCTOR_SHARE_PERCENT = 30;
+export const INSTRUCTOR_COUPON_SHARE_PERCENT = 70;
+
 /** Days a sale waits before it can be paid out (the refund window). */
 export const EARNINGS_HOLD_DAYS = 14;
 
@@ -12,6 +16,8 @@ type SaleInput = {
   courseId: string;
   amountCents: number;
   currency: string;
+  /** The Academy coupon used for this purchase, if any. */
+  couponId?: string | null;
 };
 
 type EarningRow = {
@@ -32,8 +38,8 @@ type EarningRow = {
 
 /**
  * A paid sale of an instructor's course becomes an earning: what the learner paid,
- * the Academy's share (fixed now, from the instructor's percentage) and what the
- * instructor earns. Safe to run twice for the same checkout. It never throws.
+ * the Academy's share (fixed now) and what the instructor earns. The instructor keeps 30%,
+ * or 70% when the learner bought with a coupon created by that same instructor. Safe to run twice for the same checkout. It never throws.
  */
 export async function recordInstructorEarning(sale: SaleInput) {
   try {
@@ -48,14 +54,21 @@ export async function recordInstructorEarning(sale: SaleInput) {
       : null;
     if (!course?.instructor_id) return;
 
-    const instructorResponse = await academyRestFetch(
-      `instructors?select=commission_percent&user_id=eq.${encodeURIComponent(course.instructor_id)}&limit=1`,
-      { useServiceRole: true },
-    );
-    const instructor = instructorResponse.ok
-      ? ((await instructorResponse.json()) as { commission_percent: number | string }[])[0]
-      : null;
-    const percent = Number(instructor?.commission_percent ?? 30);
+    // Was it the instructor's own coupon?
+    let ownCoupon = false;
+    if (sale.couponId) {
+      const couponResponse = await academyRestFetch(
+        `coupons?select=instructor_id&id=eq.${encodeURIComponent(sale.couponId)}&limit=1`,
+        { useServiceRole: true },
+      );
+      const coupon = couponResponse.ok
+        ? ((await couponResponse.json()) as { instructor_id: string | null }[])[0]
+        : null;
+      ownCoupon = Boolean(coupon?.instructor_id && coupon.instructor_id === course.instructor_id);
+    }
+    const instructorShare = ownCoupon ? INSTRUCTOR_COUPON_SHARE_PERCENT : INSTRUCTOR_SHARE_PERCENT;
+    // "commission_percent" is the Academy's part
+    const percent = 100 - instructorShare;
 
     const platform = Math.round((sale.amountCents * percent) / 100);
     const availableAt = new Date(Date.now() + EARNINGS_HOLD_DAYS * 86_400_000).toISOString();

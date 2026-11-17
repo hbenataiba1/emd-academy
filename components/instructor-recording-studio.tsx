@@ -1403,7 +1403,7 @@ export function InstructorRecordingStudio({
   return (
     <>
       {createPortal(
-        <div className="fixed inset-0 z-[110] overflow-y-auto bg-[#0b0814] text-white">
+        <div data-guide-context="studio" data-guide-busy={phase === 'recording' || phase === 'paused' || phase === 'countdown' ? '1' : undefined} className="fixed inset-0 z-[110] overflow-y-auto bg-[#0b0814] text-white">
           <div className="mx-auto w-full max-w-[1320px] px-4 py-5">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -1573,6 +1573,7 @@ export function InstructorRecordingStudio({
                         type="button"
                         onClick={() => void begin()}
                         disabled={phase === 'countdown' || !sourceReady}
+                        data-guide="studio-start"
                         className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#ef4444] px-6 text-sm font-black text-white transition hover:bg-[#dc2626] disabled:opacity-50"
                       >
                         <span className="size-3 rounded-full bg-white" /> Start recording
@@ -1617,7 +1618,7 @@ export function InstructorRecordingStudio({
 
                     {phase === 'review' && history.length > 0 ? (
                       <>
-                        <button type="button" onClick={() => void useRecording()} disabled={finishing} className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#34d4c6] px-6 text-sm font-black text-[#08110f] transition hover:bg-[#5ee7dc] disabled:opacity-60">
+                        <button type="button" data-guide="studio-use" onClick={() => void useRecording()} disabled={finishing} className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#34d4c6] px-6 text-sm font-black text-[#08110f] transition hover:bg-[#5ee7dc] disabled:opacity-60">
                           <Check className="size-5" /> Use this video ({clock(takeDuration(history[history.length - 1]))}, about {megabytes(takeBytes(history[history.length - 1]))} MB)
                         </button>
                         <button type="button" onClick={again} className="inline-flex h-12 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 text-sm font-bold hover:bg-white/15">
@@ -1690,7 +1691,7 @@ export function InstructorRecordingStudio({
 
                 {/* the settings */}
                 <div className="space-y-4">
-                  <div className={card}>
+                  <div data-guide="studio-slides" className={card}>
                     <p className={label}>Slides</p>
                     <div className="mt-2 space-y-2">
                       <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#7c3aed] px-4 text-sm font-black transition hover:bg-[#6d31dc]">
@@ -1774,7 +1775,7 @@ export function InstructorRecordingStudio({
                     </div>
                   </div>
 
-                  <div className={card}>
+                  <div data-guide="studio-mic" className={card}>
                     <p className={label}>Microphone</p>
                     {micIssue ? issueBox(micIssue, () => void retryMic(), mics.length) : null}
                     {mics.length > 1 ? (

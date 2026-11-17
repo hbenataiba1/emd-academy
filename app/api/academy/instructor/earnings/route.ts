@@ -1,5 +1,5 @@
 import { academyRestFetch, json } from '@/lib/academy-auth';
-import { EARNINGS_HOLD_DAYS } from '@/lib/academy-earnings';
+import { EARNINGS_HOLD_DAYS, INSTRUCTOR_COUPON_SHARE_PERCENT, INSTRUCTOR_SHARE_PERCENT } from '@/lib/academy-earnings';
 import { getOwnCourses, requireInstructor } from '@/lib/academy-instructor';
 
 type EarningRow = {
@@ -67,7 +67,8 @@ export async function GET(request: Request) {
 
   return json({
     available: true,
-    commissionPercent: Number(auth.instructor.commission_percent),
+    instructorSharePercent: INSTRUCTOR_SHARE_PERCENT,
+    instructorCouponSharePercent: INSTRUCTOR_COUPON_SHARE_PERCENT,
     holdDays: EARNINGS_HOLD_DAYS,
     hasPaymentDetails: detailsResponse.ok ? ((await detailsResponse.json()) as unknown[]).length > 0 : true,
     availableCents,

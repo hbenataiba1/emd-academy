@@ -5,7 +5,6 @@ import {
   ClipboardCheck,
   Globe,
   LayoutDashboard,
-  Presentation,
   Send,
   ShieldCheck,
   Users,
@@ -13,10 +12,15 @@ import {
   Rocket,
 } from 'lucide-react';
 
+import { Caveat } from 'next/font/google';
+
 import { AcademyFooter, AcademyHeader } from '@/components/academy-shell';
 import { WhyTeachScroller } from '@/components/why-teach-scroller';
 
 const APPLY = '/academy/instructor/apply';
+
+// the handwriting of the sentence at the top of the page
+const handwriting = Caveat({ subsets: ['latin'], weight: ['600', '700'] });
 
 const steps = [
   { icon: Send, title: 'Apply', text: 'Tell us about your background and send your LinkedIn profile.' },
@@ -25,8 +29,8 @@ const steps = [
   { icon: Rocket, title: 'We publish it', text: 'We review it, prepare the cover and put it online for learners.' },
   {
     icon: Wallet,
-    title: 'You keep 70%',
-    text: 'Of every sale of your course. A 30% platform fee covers hosting, secure payments, certificates and promotion. We send you your earnings.',
+    title: 'You get paid',
+    text: 'Learners pay through the Academy and every sale is tracked in your dashboard. We send you your earnings.',
   },
 ];
 
@@ -49,7 +53,7 @@ const faqs = [
   },
   {
     q: 'How and when do I get paid?',
-    a: 'You keep 70% of every sale. Learners pay through the Academy, and a platform fee of 30% covers hosting, secure payments, certificates and promotion. You see your earnings in your dashboard, and our team sends your payout to you.',
+    a: 'Learners pay through the Academy, and you earn from every sale of your course. You see your earnings in your dashboard, and our team sends your payout to you.',
   },
   {
     q: 'Who creates the certificates?',
@@ -85,10 +89,9 @@ export function AcademyBecomeInstructorPage() {
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.84fr)] lg:px-8 lg:py-16">
           {/* Left: text */}
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#e9fbf8] px-3 py-1 text-xs font-black uppercase tracking-wider text-[#067b75]">
-              <Presentation className="size-3.5" aria-hidden="true" />
-              Become an instructor
-            </span>
+            <p className={`${handwriting.className} -rotate-1 whitespace-nowrap font-bold leading-tight text-[#7c3aed]`} style={{ fontSize: "clamp(1.35rem, 3.2vw, 2.5rem)" }}>
+              We are looking for experts who love to teach
+            </p>
             <h1 className="mt-5 max-w-4xl text-4xl font-bold leading-[1.06] text-[#171321] sm:text-5xl lg:text-6xl">
               Teach medical device professionals around the world
             </h1>

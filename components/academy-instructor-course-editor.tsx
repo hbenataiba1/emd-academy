@@ -496,7 +496,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
   const last = STEP_TITLES.length;
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-[#fbfbfe] text-[#191625]">
+    <div data-editor-step={step} className="fixed inset-0 z-[60] flex flex-col bg-[#fbfbfe] text-[#191625]">
       <input ref={fileInput} type="file" className="hidden" onChange={onFile} />
       {dialog}
       {studioIntro ? (
@@ -635,10 +635,10 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
               {step === 1 ? (
                 <>
             {/* Details */}
-            <div className="space-y-5 rounded-2xl border border-[#e4ddf4] bg-white p-6 sm:p-8">
+            <div data-guide="course-form" className="space-y-5 rounded-2xl border border-[#e4ddf4] bg-white p-6 sm:p-8">
               <label className="block">
                 <span className="text-sm font-bold text-[#302945]">Title *</span>
-                <input className={`${inputClass} mt-1.5`} value={details.title} onChange={(e) => setDetail('title', e.target.value)} disabled={!editable} maxLength={140} />
+                <input data-guide="course-title" className={`${inputClass} mt-1.5`} value={details.title} onChange={(e) => setDetail('title', e.target.value)} disabled={!editable} maxLength={140} />
               </label>
               <label className="block">
                 <span className="text-sm font-bold text-[#302945]">Short subtitle</span>
@@ -681,7 +681,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
             <div className="space-y-5 rounded-2xl border border-[#e4ddf4] bg-white p-6 sm:p-8">
               <label className="block max-w-xs">
                 <span className="text-sm font-bold text-[#302945]">Price (USD)</span>
-                <input className={`${inputClass} mt-1.5`} type="number" min={0} step={1} value={details.price} onChange={(e) => setDetail('price', e.target.value)} disabled={!editable} placeholder="0 = free" />
+                <input data-guide="course-price" className={`${inputClass} mt-1.5`} type="number" min={0} step={1} value={details.price} onChange={(e) => setDetail('price', e.target.value)} disabled={!editable} placeholder="0 = free" />
               </label>
               <p className="rounded-xl bg-[#f6f4fb] p-4 text-xs leading-5 text-[#6e687d]">
                 You do not need to upload a cover image: our team designs it before the course goes online. Learners
@@ -830,6 +830,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#7c3aed] text-xs font-black text-white">{lessonIndex + 1}</span>
                           <input
+                            data-guide={lessonIndex === 0 ? 'lesson-title' : undefined}
                             className={`${inputClass} min-w-0 flex-1`}
                             value={lesson.title}
                             onChange={(e) => patchLesson(section.key, lesson.key, { title: e.target.value })}
@@ -912,6 +913,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
                                       </button>
                                       <button
                                         type="button"
+                                        data-guide="record-studio"
                                         onClick={() => setStudioIntro({ section: section.key, lesson: lesson.key })}
                                         className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#d9d1ee] bg-white px-5 text-sm font-bold text-[#302945] hover:border-[#7c3aed]"
                                       >
@@ -943,6 +945,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
                                       </button>
                                       <button
                                         type="button"
+                                        data-guide="record-studio"
                                         onClick={() => setStudioIntro({ section: section.key, lesson: lesson.key })}
                                         className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#7c3aed] bg-white px-6 text-sm font-black text-[#6d28d9] transition hover:bg-[#f4f0ff]"
                                       >
@@ -1064,6 +1067,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
                       <button
                         type="button"
                         onClick={() => updateSections(sections.map((s) => (s.key === section.key ? { ...s, lessons: [...s.lessons, { ...blankLesson(), sectionTitle: s.lessons[s.lessons.length - 1]?.sectionTitle || '' }] } : s)))}
+                        data-guide="add-lesson"
                         className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-[#c4b5fd] px-3 text-xs font-bold text-[#7c3aed] hover:bg-[#f4f0ff]"
                       >
                         <Plus className="size-3.5" aria-hidden="true" /> Add a lesson
@@ -1080,7 +1084,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
               {step === 4 ? (
                 <>
             {/* Final exam */}
-            <div className="rounded-2xl border border-[#e4ddf4] bg-white p-5 sm:p-8">
+            <div data-guide="exam" className="rounded-2xl border border-[#e4ddf4] bg-white p-5 sm:p-8">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-black">
@@ -1384,6 +1388,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
             <button
               type="button"
               onClick={() => setStep(step + 1)}
+              data-guide="next-step"
               className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#7c3aed] px-6 text-sm font-black text-white transition hover:bg-[#6d31dc]"
             >
               Next step <ArrowRight className="size-4" aria-hidden="true" />
@@ -1393,6 +1398,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
               type="button"
               onClick={() => void submitForReview()}
               disabled={saving || submitting || !allOk}
+              data-guide="send-review"
               title={allOk ? undefined : 'Complete the list above first'}
               className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#10b981] px-6 text-sm font-black text-white transition hover:bg-[#0f9f70] disabled:cursor-not-allowed disabled:opacity-50"
             >

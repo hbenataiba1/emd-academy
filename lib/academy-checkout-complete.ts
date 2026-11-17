@@ -86,6 +86,7 @@ export async function completeCheckoutSession(session: StripeCheckoutSession) {
     courseId,
     amountCents,
     currency,
+    couponId: session.metadata?.coupon_id ?? null,
   });
 
   // The webhook and the instant check can both run this: the email goes out once.

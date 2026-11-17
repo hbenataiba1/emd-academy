@@ -70,9 +70,9 @@ const aboutMenuItems: MegaMenuItem[] = [
   { title: "Our Team", description: "Meet experts dedicated to guiding your products safely to market.", href: "https://easymedicaldevice.com/team/", icon: Users },
 ];
 
-// The "Become an instructor" link is hidden from the menus for now. Set to true to show it again.
+// The "Become an instructor" link is shown in the menus. Set to false to hide it.
 // The page itself still works at /academy/become-instructor.
-const SHOW_BECOME_INSTRUCTOR = false;
+const SHOW_BECOME_INSTRUCTOR = true;
 
 const SITE = "https://easymedicaldevice.com";
 

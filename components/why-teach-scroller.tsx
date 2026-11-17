@@ -183,7 +183,7 @@ const pictures: Record<string, ReactNode> = {
   ),
   earnings: (
     <Frame title="Earnings">
-      <Tile x={28} y={84} w={160} label="You earn" value="70%" />
+      <Tile x={28} y={84} w={160} label="Total earned" value="$8,420" />
       <Tile x={200} y={84} w={160} label="This month" value="$1,240" />
       <Tile x={372} y={84} w={160} label="Sales" value="38" />
       {[60, 95, 70, 130, 110, 160, 190].map((h, i) => (

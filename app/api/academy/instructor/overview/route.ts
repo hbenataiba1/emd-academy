@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   const filter = inFilter(courses.map((course) => course.id));
 
   if (!filter) {
-    return json({ courses: 0, published: 0, enrollments: 0, learners: 0, certificates: 0, reviews: 0, rating: 0, unanswered: 0 });
+    return json({ courses: 0, published: 0, submitted: 0, enrollments: 0, learners: 0, certificates: 0, reviews: 0, rating: 0, unanswered: 0 });
   }
 
   const [enrollments, certificates, reviews, comments] = await Promise.all([
@@ -33,6 +33,8 @@ export async function GET(request: Request) {
   return json({
     courses: courses.length,
     published: courses.filter((course) => course.is_published).length,
+    // courses already sent to the team (a new course stays a draft until it is sent)
+    submitted: courses.filter((course) => course.review_status !== 'draft').length,
     enrollments: enrollments.length,
     learners: new Set(enrollments.map((row) => row.user_id)).size,
     certificates: certificates.length,
