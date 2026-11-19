@@ -14,6 +14,8 @@ export type AcademyEmailInput = {
   templateName: string;
   recipientName?: string;
   recipientUserId?: string;
+  /** Where the answer goes when someone clicks "reply". */
+  replyTo?: { address: string; name?: string };
   /** Set for an email that must only ever go out once (for example the welcome). */
   dedupeKey?: string;
   metadata?: Record<string, unknown>;
@@ -153,6 +155,7 @@ export async function sendAcademyEmail(
           body: { contentType: 'HTML', content: withOpenPixel(input.html, row.id) },
           from: { emailAddress: { name: SENDER_NAME, address: mailbox } },
           toRecipients: [{ emailAddress: { address: input.to } }],
+          ...(input.replyTo ? { replyTo: [{ emailAddress: { address: input.replyTo.address, name: input.replyTo.name } }] } : {}),
         },
         // Automated emails would only fill the mailbox's Sent folder.
         saveToSentItems: false,

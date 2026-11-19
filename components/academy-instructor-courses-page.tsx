@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, LoaderCircle, Plus } from 'lucide-react';
+import { ArrowLeft, LoaderCircle, Plus, Trash2 } from 'lucide-react';
 
+import { useConfirm } from '@/components/confirm-dialog';
 import { ListSkeleton } from '@/components/instructor-skeletons';
 import { getAcademyAuthHeader, getStoredAcademySession } from '@/lib/academy-session';
 
@@ -39,6 +40,8 @@ export function AcademyInstructorCoursesPage() {
   const [courses, setCourses] = useState<CourseSummary[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [deleting, setDeleting] = useState('');
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     const session = getStoredAcademySession();
@@ -104,8 +107,41 @@ export function AcademyInstructorCoursesPage() {
     }
   }
 
+  // A draft (not sent to the team yet) can be deleted by its instructor.
+  async function removeDraft(course: CourseSummary) {
+    const session = getStoredAcademySession();
+    if (!session || deleting) return;
+    const ok = await confirm({
+      title: 'Delete this draft?',
+      message: `"${course.title}" and its lessons will be deleted. This cannot be undone.`,
+      confirmLabel: 'Delete the draft',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setDeleting(course.id);
+    setError('');
+    try {
+      const response = await fetch(`/api/academy/instructor/courses/${encodeURIComponent(course.id)}`, {
+        method: 'DELETE',
+        headers: getAcademyAuthHeader(session),
+      });
+      if (response.ok) {
+        setCourses((list) => (list ? list.filter((item) => item.id !== course.id) : list));
+      } else {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        setError(payload.message || 'The course could not be deleted.');
+      }
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setDeleting('');
+    }
+  }
+
   return (
     <>
+      {dialog}
       <section>
         <h1 className="mt-4 text-3xl font-black">My courses</h1>
         <p className="mt-1 text-sm text-[#5f5872]">
@@ -151,6 +187,23 @@ export function AcademyInstructorCoursesPage() {
                     </div>
                     <span className={`rounded-full px-3 py-1 text-xs font-black ${status.style}`}>{status.label}</span>
                   </div>
+                  {course.review_status === 'draft' && !course.is_published ? (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void removeDraft(course);
+                        }}
+                        disabled={deleting === course.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#f1d3d3] px-3 py-1.5 text-xs font-bold text-[#c0264b] hover:bg-[#fff8f8] disabled:opacity-50"
+                      >
+                        {deleting === course.id ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" /> : <Trash2 className="size-3.5" aria-hidden="true" />}
+                        Delete this draft
+                      </button>
+                    </div>
+                  ) : null}
                   {course.review_status === 'changes_requested' && course.review_note ? (
                     <p className="mt-3 rounded-xl bg-[#fff8f8] p-3 text-sm text-[#5a2b2b]">
                       <strong>From the team:</strong> {course.review_note}

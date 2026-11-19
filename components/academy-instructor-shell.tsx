@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   LoaderCircle,
   LogOut,
+  Mail,
   MessageSquare,
   Plus,
   Receipt,
@@ -44,6 +45,7 @@ export type DashboardPage =
   | 'reviews'
   | 'earnings'
   | 'payment'
+  | 'contact'
   | 'profile';
 
 const NAV: { key: DashboardPage; label: string; href: string; icon: typeof BookOpen }[] = [
@@ -57,6 +59,7 @@ const NAV: { key: DashboardPage; label: string; href: string; icon: typeof BookO
   { key: 'reviews', label: 'Reviews', href: '/academy/instructor/reviews', icon: Star },
   { key: 'earnings', label: 'Earnings', href: '/academy/instructor/earnings', icon: Wallet },
   { key: 'payment', label: 'Payment details', href: '/academy/instructor/payment', icon: CreditCard },
+  { key: 'contact', label: 'Contact us', href: '/academy/instructor/contact', icon: Mail },
 ];
 
 /**

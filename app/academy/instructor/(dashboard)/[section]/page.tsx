@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const SECTIONS: WorkspaceSection[] = ['enrollments', 'learners', 'certificates', 'questions', 'coupons', 'reviews', 'earnings', 'payment', 'profile'];
+const SECTIONS: WorkspaceSection[] = ['enrollments', 'learners', 'certificates', 'questions', 'coupons', 'reviews', 'earnings', 'payment', 'contact', 'profile'];
 
 export default async function InstructorSectionRoute({
   params,

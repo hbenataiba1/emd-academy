@@ -44,6 +44,7 @@ export type WorkspaceSection =
   | 'reviews'
   | 'earnings'
   | 'payment'
+  | 'contact'
   | 'profile';
 
 type Overview = {
@@ -124,6 +125,7 @@ export function InstructorWorkspace({ section }: { section: WorkspaceSection }) 
       {section === 'reviews' ? <ReviewsSection /> : null}
       {section === 'earnings' ? <EarningsSection /> : null}
       {section === 'payment' ? <PaymentSection /> : null}
+      {section === 'contact' ? <ContactSection /> : null}
       {section === 'profile' ? <ProfileSection /> : null}
     </>
   );
@@ -1155,6 +1157,116 @@ function PaymentSection() {
           </div>
         </form>
       )}
+    </>
+  );
+}
+
+/* ── Contact us ── */
+const CONTACT_TOPICS = ['Question about my course', 'Payments and earnings', 'Technical problem', 'My account', 'Other'];
+
+function ContactSection() {
+  const [email, setEmail] = useState('');
+  const [topic, setTopic] = useState(CONTACT_TOPICS[0]);
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [problem, setProblem] = useState('');
+
+  useEffect(() => {
+    const session = getStoredAcademySession();
+    if (session?.user.email) setEmail(session.user.email);
+  }, []);
+
+  async function send(event: React.FormEvent) {
+    event.preventDefault();
+    if (sending) return;
+    setSending(true);
+    setProblem('');
+    try {
+      const response = await fetch('/api/academy/instructor/contact', {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({ topic, message }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) {
+        setProblem(payload.message || 'Your message could not be sent.');
+      } else {
+        setSent(true);
+        setMessage('');
+      }
+    } catch {
+      setProblem('Network error. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <>
+      <Title title="Contact us" text="A question, a problem or an idea? Write to our team." />
+      <div className="max-w-2xl">
+        {sent ? (
+          <div className={`${card} p-6 sm:p-8`}>
+            <p className="flex size-11 items-center justify-center rounded-full bg-[#e6f8ef] text-xl text-[#0f8a5f]">✓</p>
+            <h2 className="mt-4 text-xl font-black">Your message was sent</h2>
+            <p className="mt-2 text-sm leading-6 text-[#5f5872]">
+              Thank you! Our team will read it and <strong>answer you by email</strong>
+              {email ? (
+                <>
+                  {' '}at <strong>{email}</strong>
+                </>
+              ) : null}
+              . Please also look in your spam folder.
+            </p>
+            <button type="button" onClick={() => setSent(false)} className="mt-5 h-10 rounded-xl border border-[#d9d1ee] px-5 text-sm font-bold text-[#302945] hover:border-[#7c3aed]">
+              Write another message
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={send} className={`${card} space-y-4 p-5 sm:p-6`}>
+            <div className="rounded-xl bg-[#f6f4fb] p-4 text-sm leading-6 text-[#5f5872]">
+              Our answer will be sent <strong>by email</strong>
+              {email ? (
+                <>
+                  {' '}to <strong>{email}</strong>
+                </>
+              ) : null}
+              . You do not need to wait on this page.
+            </div>
+            <label className="block">
+              <span className="text-sm font-bold text-[#302945]">Topic</span>
+              <select className={`${inputClass} mt-1.5`} value={topic} onChange={(event) => setTopic(event.target.value)}>
+                {CONTACT_TOPICS.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-[#302945]">Your message</span>
+              <textarea
+                className={`${inputClass} mt-1.5`}
+                rows={7}
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                maxLength={4000}
+                required
+                placeholder="Tell us how we can help. The more details, the faster we can answer."
+              />
+            </label>
+            {problem ? <p className="text-sm font-semibold text-[#c0264b]">{problem}</p> : null}
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={sending || message.trim().length < 10}
+                className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#7c3aed] px-6 text-sm font-black text-white hover:bg-[#6d31dc] disabled:opacity-50"
+              >
+                <Send className="size-4" aria-hidden="true" /> {sending ? 'Sending...' : 'Send message'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </>
   );
 }
