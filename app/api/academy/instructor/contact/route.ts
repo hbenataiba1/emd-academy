@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   const name = auth.instructor.full_name || auth.user.email;
   const html = `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#191625;line-height:1.55;">
 <p style="margin:0 0 4px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#7c3aed;font-weight:bold;">Academy instructor message</p>
-<p style="margin:0 0 16px;font-size:14px;"><strong>${escapeHtml(name)}</strong> (${escapeHtml(auth.user.email)})<br>Topic: ${escapeHtml(topic)}</p>
+<p style="margin:0 0 16px;font-size:14px;"><strong>${escapeHtml(name)}</strong><br>Instructor email: ${escapeHtml(auth.user.email)}<br>Topic: ${escapeHtml(topic)}</p>
 <div style="white-space:pre-wrap;font-size:15px;border-left:4px solid #7c3aed;padding:4px 0 4px 14px;">${escapeHtml(message)}</div>
 <p style="margin:20px 0 0;font-size:12px;color:#6e687d;">Sent from the instructor dashboard of Easy Medical Device Academy. Reply to this email to answer the instructor.</p>
 </body></html>`;
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     to: cleanEnv(process.env.ACADEMY_CONTACT_INBOX) || INBOX,
     subject: `[Academy instructor] ${topic} - ${name}`,
     html,
-    text: `Academy instructor message\n\n${name} (${auth.user.email})\nTopic: ${topic}\n\n${message}`,
+    text: `Academy instructor message\n\n${name}\nInstructor email: ${auth.user.email}\nTopic: ${topic}\n\n${message}`,
     templateKey: 'instructor-contact',
     templateName: 'Instructor contact message',
     recipientName: name,
