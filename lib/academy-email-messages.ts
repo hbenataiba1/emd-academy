@@ -361,30 +361,30 @@ export function instructorApprovedEmail({ name, note }: { name: string; note?: s
   const first = firstNameOf(name);
   const href = `${SITE}/academy/instructor`;
   const html = layout({
-    preview: 'Welcome to the Academy faculty. Your faculty dashboard is ready.',
-    eyebrow: 'Faculty application approved',
-    title: 'Welcome to the Academy faculty',
+    preview: 'Welcome to Easy Medical Device Academy. Your dashboard is ready.',
+    eyebrow: 'Application approved',
+    title: 'Welcome to the Academy',
     content:
-      paragraph(`Hi ${escapeHtml(first)}, congratulations: your application was approved and you are now part of the <strong>Easy Medical Device Academy faculty</strong>. Thank you for sharing your regulatory expertise with our learners.`) +
+      paragraph(`Hi ${escapeHtml(first)}, congratulations: your application was approved and you can now teach on <strong>Easy Medical Device Academy</strong>. Thank you for sharing your regulatory expertise with our learners.`) +
       (note ? `<p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6e687d;">A word from the Academy team</p>` + quote(note) : '') +
       paragraph('<strong>How to get started</strong>') +
       paragraph(
-        '1. Open your faculty dashboard and complete your profile.<br>2. Create your first course and add your lessons.<br>3. Send it for review: our team checks every course before it goes live on the Academy.',
+        '1. Open your Academy dashboard and complete your profile.<br>2. Create your first course and add your lessons.<br>3. Send it for review: our team checks every course before it goes live on the Academy.',
       ) +
       paragraph('We are glad to have you on board. If you have any question, just reply to this email.'),
-    cta: { label: 'Open my faculty dashboard', href },
+    cta: { label: 'Open my Academy dashboard', href },
   });
   return {
-    subject: 'Welcome to the Easy Medical Device Academy faculty',
+    subject: 'Welcome to Easy Medical Device Academy',
     html,
     text: lines([
       `Hi ${first},`,
       '',
-      'Congratulations: your application was approved and you are now part of the Easy Medical Device Academy faculty.',
+      'Congratulations: your application was approved and you can now teach on Easy Medical Device Academy.',
       ...(note ? ['', `A word from the Academy team: ${note}`] : []),
       '',
       'How to get started:',
-      '1. Open your faculty dashboard and complete your profile.',
+      '1. Open your Academy dashboard and complete your profile.',
       '2. Create your first course and add your lessons.',
       '3. Send it for review: our team checks every course before it goes live on the Academy.',
       '',

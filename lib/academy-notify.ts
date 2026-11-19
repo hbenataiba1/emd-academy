@@ -389,7 +389,7 @@ export async function notifyInstructorDecision(userId: string) {
       to: row.email,
       ...mail,
       templateKey: row.status === 'approved' ? 'instructor_approved' : 'instructor_rejected',
-      templateName: row.status === 'approved' ? 'Faculty approved' : 'Instructor declined',
+      templateName: row.status === 'approved' ? 'Instructor approved' : 'Instructor declined',
       recipientName: row.full_name,
       recipientUserId: userId,
       dedupeKey: `instructor-${row.status}:${userId}:${row.reviewed_at || ''}`,
