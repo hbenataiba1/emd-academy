@@ -19,7 +19,10 @@ export type AcademyEmailInput = {
   metadata?: Record<string, unknown>;
 };
 
-type LogRow = { id: string; status: string };
+type LogRow = { id: string; status: string; created_at?: string };
+
+// A "queued" row that never got sent (for example Microsoft was unreachable) is retried after this long.
+const STALE_QUEUED_MS = 15 * 60 * 1000;
 
 function senderMailbox() {
   return (process.env.ACADEMY_EMAIL_SENDER || DEFAULT_SENDER).trim();
@@ -95,6 +98,7 @@ export async function sendAcademyEmail(
     return { sent: false, reason: 'Microsoft email is not set up (MICROSOFT_* variables).' };
   }
 
+  let logId: string | null = null;
   try {
     // 1. Reserve the log row first. With a dedupe key, a second request finds it.
     const reserve = await academyRestFetch('email_logs?on_conflict=dedupe_key', {
@@ -122,16 +126,18 @@ export async function sendAcademyEmail(
 
     if (!row && input.dedupeKey) {
       const existing = await academyRestFetch(
-        `email_logs?select=id,status&dedupe_key=eq.${encodeURIComponent(input.dedupeKey)}&limit=1`,
+        `email_logs?select=id,status,created_at&dedupe_key=eq.${encodeURIComponent(input.dedupeKey)}&limit=1`,
         { useServiceRole: true },
       );
       const found = existing.ok ? ((await existing.json()) as LogRow[])[0] : undefined;
-      // Already sent (or being sent): nothing to do. A failed one is tried again.
-      if (!found || found.status !== 'failed') return { sent: false, reason: 'Already sent.' };
+      // Already sent (or being sent): nothing to do. A failed one, or one stuck in "queued", is tried again.
+      const stuck = found?.status === 'queued' && Date.now() - new Date(found.created_at || 0).getTime() > STALE_QUEUED_MS;
+      if (!found || (found.status !== 'failed' && !stuck)) return { sent: false, reason: 'Already sent.' };
       row = found;
     }
 
     if (!row) return { sent: false, reason: 'Could not record the email.' };
+    logId = row.id;
 
     // 2. Send it through Microsoft Graph.
     const mailbox = senderMailbox();
@@ -175,6 +181,9 @@ export async function sendAcademyEmail(
     });
     return { sent: true };
   } catch (error) {
-    return { sent: false, reason: error instanceof Error ? error.message : 'Email failed.' };
+    const message = error instanceof Error ? error.message : 'Email failed.';
+    // Do not leave the log on "queued" forever: record why it was not sent.
+    if (logId) await updateLog(logId, { status: 'failed', error_message: message.slice(0, 500) }).catch(() => {});
+    return { sent: false, reason: message };
   }
 }
