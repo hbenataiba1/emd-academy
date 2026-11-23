@@ -12,15 +12,14 @@ import {
   Rocket,
 } from 'lucide-react';
 
-import { Caveat } from 'next/font/google';
-
 import { AcademyFooter, AcademyHeader } from '@/components/academy-shell';
 import { WhyTeachScroller } from '@/components/why-teach-scroller';
 
 const APPLY = '/academy/instructor/apply';
 
-// the handwriting of the sentence at the top of the page
-const handwriting = Caveat({ subsets: ['latin'], weight: ['600', '700'] });
+// The handwriting of the sentence at the top of the page: the font file (Caveat, SIL Open Font License) is part of the project,
+// so the build never needs to download it.
+const HANDWRITING_CSS = "@font-face{font-family:'CaveatLocal';font-style:normal;font-weight:700;font-display:swap;src:url('/academy/fonts/caveat-700.woff2') format('woff2');}";
 
 const steps = [
   { icon: Send, title: 'Apply', text: 'Tell us about your background and send your LinkedIn profile.' },
@@ -68,6 +67,7 @@ const faqs = [
 export function AcademyBecomeInstructorPage() {
   return (
     <main className="min-h-screen bg-[#fbfbfe] text-[#191625]">
+      <style>{HANDWRITING_CSS}</style>
       <AcademyHeader />
 
       <section className="relative isolate overflow-hidden bg-gradient-to-br from-[#ece4ff] via-[#f6f2ff] to-[#dff8f4]">
@@ -89,7 +89,7 @@ export function AcademyBecomeInstructorPage() {
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.84fr)] lg:px-8 lg:py-16">
           {/* Left: text */}
           <div>
-            <p className={`${handwriting.className} -rotate-1 whitespace-nowrap font-bold leading-tight text-[#7c3aed]`} style={{ fontSize: "clamp(1.35rem, 3.2vw, 2.5rem)" }}>
+            <p className="-rotate-1 whitespace-nowrap font-bold leading-tight text-[#7c3aed]" style={{ fontFamily: "'CaveatLocal', cursive", fontSize: "clamp(1.35rem, 3.2vw, 2.5rem)" }}>
               We are looking for experts who love to teach
             </p>
             <h1 className="mt-5 max-w-4xl text-4xl font-bold leading-[1.06] text-[#171321] sm:text-5xl lg:text-6xl">
