@@ -51,6 +51,8 @@ type ExamInput = {
 };
 
 type SaveBody = {
+  /** A draft save (automatic or "Save draft"): unfinished work is kept as it is instead of being refused. */
+  draft?: boolean;
   exam?: ExamInput;
   /** Slides of the whole course, shown in every lesson. */
   presentationUrl?: string;
@@ -190,16 +192,25 @@ export async function PUT(
   }
 
   const body = await readJson<SaveBody>(request, {});
-  const title = String(body.title || '').trim().slice(0, 140);
-  if (title.length < 3) return json({ message: 'Give your course a title.' }, 400);
+  const draft = Boolean(body.draft);
+
+  // A draft keeps whatever was written so far: no title yet is fine, an unfinished price is left as it was.
+  let title = String(body.title || '').trim().slice(0, 140);
+  if (title.length < 3) {
+    if (!draft) return json({ message: 'Give your course a title.' }, 400);
+    title = 'Untitled course';
+  }
 
   const price = Number(body.price || 0);
-  const priceCents = Math.round(price * 100);
-  if (!Number.isFinite(price) || priceCents < 0 || priceCents > 200000) {
-    return json({ message: 'The price must be between 0 and 2000 USD.' }, 400);
-  }
-  if (priceCents > 0 && priceCents < MIN_CHARGE_CENTS) {
-    return json({ message: `A paid course costs at least ${(MIN_CHARGE_CENTS / 100).toFixed(2)} USD.` }, 400);
+  let priceCents: number | null = Math.round(price * 100);
+  const priceProblem = !Number.isFinite(price) || priceCents < 0 || priceCents > 200000
+    ? 'The price must be between 0 and 2000 USD.'
+    : priceCents > 0 && priceCents < MIN_CHARGE_CENTS
+      ? `A paid course costs at least ${(MIN_CHARGE_CENTS / 100).toFixed(2)} USD.`
+      : '';
+  if (priceProblem) {
+    if (!draft) return json({ message: priceProblem }, 400);
+    priceCents = null;
   }
 
   // The final exam: every question needs text, two or more answers and a right answer.
@@ -223,15 +234,17 @@ export async function PUT(
     const correct = (input.correctOptionIds || []).filter((id) => options.some((option) => option.id === id));
 
     if (!question && options.length === 0) continue;
-    if (!question) return json({ message: `Exam question ${index + 1} has no text.` }, 400);
-    if (options.length < 2) return json({ message: `Exam question ${index + 1} needs at least two answers.` }, 400);
-    if (correct.length === 0) return json({ message: `Choose the right answer of exam question ${index + 1}.` }, 400);
+    if (!draft) {
+      if (!question) return json({ message: `Exam question ${index + 1} has no text.` }, 400);
+      if (options.length < 2) return json({ message: `Exam question ${index + 1} needs at least two answers.` }, 400);
+      if (correct.length === 0) return json({ message: `Choose the right answer of exam question ${index + 1}.` }, 400);
+    }
 
     examQuestions.push({
       _key: String(input.key || `q${index}`),
       question,
       options,
-      correctOptionId: correct[0],
+      correctOptionId: correct[0] ?? '',
       correctOptionIds: correct,
       explanation: String(input.explanation || '').trim().slice(0, 800),
     });
@@ -248,12 +261,20 @@ export async function PUT(
   const ownIds = new Set(existing.map((row) => row.id));
 
   const rows: Record<string, unknown>[] = [];
+  // For each lesson received, in order: its id once saved (or null when it was left out), so the editor can follow.
+  const lessonIds: (string | null)[] = [];
   let order = 0;
   for (const section of (body.sections || []).slice(0, 40)) {
     const sectionTitle = String(section.title || '').trim().slice(0, 120) || 'Lessons';
     for (const lesson of (section.lessons || []).slice(0, 80)) {
-      const lessonTitle = String(lesson.title || '').trim().slice(0, 160);
-      if (!lessonTitle) continue;
+      let lessonTitle = String(lesson.title || '').trim().slice(0, 160);
+      // A draft never loses an uploaded video or a text because the title is not written yet.
+      const hasContent = Boolean(String(lesson.videoUrl || '').trim() || String(lesson.text || '').trim() || (lesson.resources || []).length > 0);
+      if (!lessonTitle && draft && hasContent) lessonTitle = 'Untitled lesson';
+      if (!lessonTitle) {
+        lessonIds.push(null);
+        continue;
+      }
 
       const isArticle = lesson.type === 'article';
       const id = lesson.id && ownIds.has(lesson.id) ? lesson.id : randomUUID();
@@ -280,6 +301,7 @@ export async function PUT(
         preview_enabled: Boolean(lesson.preview),
         updated_at: new Date().toISOString(),
       });
+      lessonIds.push(id);
     }
   }
 
@@ -370,8 +392,9 @@ export async function PUT(
       description: String(body.description || '').trim().slice(0, 8000) || null,
       category: String(body.category || '').trim().slice(0, 60) || 'EU MDR',
       level,
-      price_cents: priceCents,
-      price_label: priceCents === 0 ? 'Free' : `$${Math.round(priceCents / 100)}`,
+      ...(priceCents === null
+        ? {}
+        : { price_cents: priceCents, price_label: priceCents === 0 ? 'Free' : `$${Math.round(priceCents / 100)}` }),
       outcomes: (body.outcomes || [])
         .map((item) => String(item || '').trim().slice(0, 200))
         .filter(Boolean)
@@ -401,7 +424,7 @@ export async function PUT(
     }
   }
 
-  return json({ saved: true });
+  return json({ saved: true, lessonIds });
 }
 
 // A draft with no learners can be deleted.

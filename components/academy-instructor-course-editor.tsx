@@ -161,6 +161,10 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
   const [exam, setExam] = useState<Exam>({ passingScore: 80, timeLimitMinutes: 0, questions: [] });
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const lastSaved = useRef<string | null>(null);
+  const saveRef = useRef<((options?: { auto?: boolean; strict?: boolean; keepalive?: boolean }) => Promise<boolean>) | null>(null);
+  const [retry, setRetry] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState(1);
@@ -232,15 +236,49 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
     void load();
   }, [load]);
 
-  // Warn before leaving with changes that were not saved.
+  const uploading = presentationProgress !== null || sections.some((section) => section.lessons.some((lesson) => lesson.progress != null));
+
+  // Warn before leaving while changes are not saved yet, or while a file is still uploading.
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !uploading) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  }, [dirty, uploading]);
+
+  // Everything is saved in the draft by itself, a moment after the last change (an uploaded video too).
+  const snapshot = details ? snapshotOf() : '';
+  useEffect(() => {
+    if (!loaded || !details) return;
+    // what was just loaded is what the server already has
+    if (lastSaved.current === null) {
+      lastSaved.current = snapshot;
+      return;
+    }
+    if (!loaded.editable || saving || submitting) return;
+    const changed = snapshot !== lastSaved.current;
+    setDirty(changed);
+    if (!changed) return;
+    const timer = window.setTimeout(() => void saveRef.current?.({ auto: true }), 1500);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot, loaded, saving, submitting, retry]);
+
+  // Leaving the page (closing the tab, changing page, switching away): the last changes are sent first.
+  useEffect(() => {
+    const flush = () => {
+      if (document.visibilityState === 'hidden') void saveRef.current?.({ auto: true, keepalive: true });
+    };
+    document.addEventListener('visibilitychange', flush);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', flush);
+      window.removeEventListener('pagehide', flush);
+      void saveRef.current?.({ auto: true, keepalive: true });
+    };
+  }, []);
 
   const editable = Boolean(loaded?.editable);
 
@@ -347,63 +385,122 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
     }
   }
 
-  async function save(): Promise<boolean> {
-    const session = getStoredAcademySession();
-    if (!session || !details) return false;
+  // What is sent to the server (the lessons of the one group, the exam, the slides...).
+  function buildBody(draft: boolean) {
+    const lessons = sections[0]?.lessons || [];
+    return {
+      draft,
+      title: details?.title ?? '',
+      subtitle: details?.subtitle ?? '',
+      description: details?.description ?? '',
+      category: details?.category ?? '',
+      level: details?.level ?? '',
+      price: Number(details?.price || 0),
+      outcomes: (details?.outcomes ?? '').split('\n'),
+      exam,
+      presentationUrl,
+      sections: lessons.reduce<{ title: string; lessons: unknown[] }[]>((groups, lesson) => {
+        const title = lesson.sectionTitle.trim();
+        const item = {
+          id: lesson.id,
+          title: lesson.title,
+          type: lesson.type,
+          videoUrl: lesson.videoUrl,
+          minutes: lesson.minutes,
+          text: lesson.text,
+          preview: lesson.preview,
+          resources: lesson.resources,
+        };
+        const lastGroup = groups[groups.length - 1];
+        if (lastGroup && lastGroup.title === title) lastGroup.lessons.push(item);
+        else groups.push({ title, lessons: [item] });
+        return groups;
+      }, []),
+    };
+  }
 
+  // The same content without the ids (they appear after the first save): used to know if something changed.
+  function snapshotOf() {
+    const body = buildBody(true);
+    return JSON.stringify({
+      ...body,
+      sections: body.sections.map((group) => ({
+        title: group.title,
+        lessons: (group.lessons as Record<string, unknown>[]).map((lesson) => {
+          const copy = { ...lesson };
+          delete copy.id;
+          return copy;
+        }),
+      })),
+    });
+  }
+
+  /**
+   * Saves the course. `auto` is the silent save that runs by itself a moment after any change (and when the page is
+   * left); it keeps unfinished work as it is. `strict` is used before sending the course to the team: everything
+   * must be complete.
+   */
+  async function save(options: { auto?: boolean; strict?: boolean; keepalive?: boolean } = {}): Promise<boolean> {
+    const session = getStoredAcademySession();
+    if (!session || !details || savingRef.current) return false;
+
+    const auto = Boolean(options.auto);
+    savingRef.current = true;
     setSaving(true);
-    setError('');
-    setNotice('');
+    if (!auto) {
+      setError('');
+      setNotice('');
+    }
+
+    const sent = snapshotOf();
+    const lessonKeys = (sections[0]?.lessons || []).map((lesson) => lesson.key);
     try {
+      const body = JSON.stringify(buildBody(!options.strict));
       const response = await fetch(`/api/academy/instructor/courses/${encodeURIComponent(courseId)}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json', ...getAcademyAuthHeader(session) },
-        body: JSON.stringify({
-          title: details.title,
-          subtitle: details.subtitle,
-          description: details.description,
-          category: details.category,
-          level: details.level,
-          price: Number(details.price || 0),
-          outcomes: details.outcomes.split('\n'),
-          exam,
-          presentationUrl,
-          sections: (sections[0]?.lessons || []).reduce<{ title: string; lessons: unknown[] }[]>((groups, lesson) => {
-            const title = lesson.sectionTitle.trim();
-            const item = {
-              id: lesson.id,
-              title: lesson.title,
-              type: lesson.type,
-              videoUrl: lesson.videoUrl,
-              minutes: lesson.minutes,
-              text: lesson.text,
-              preview: lesson.preview,
-              resources: lesson.resources,
-            };
-            const lastGroup = groups[groups.length - 1];
-            if (lastGroup && lastGroup.title === title) lastGroup.lessons.push(item);
-            else groups.push({ title, lessons: [item] });
-            return groups;
-          }, []),
-        }),
+        body,
+        keepalive: Boolean(options.keepalive) && body.length < 60000,
       });
-      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      const payload = (await response.json().catch(() => ({}))) as { message?: string; lessonIds?: (string | null)[] };
       if (!response.ok) {
-        setError(payload.message || 'The course could not be saved.');
+        if (auto) {
+          setError('Automatic saving did not work. Your changes are still here, we will try again.');
+          window.setTimeout(() => setRetry((count) => count + 1), 8000);
+        } else {
+          setError(payload.message || 'The course could not be saved.');
+        }
         return false;
       }
-      setDirty(false);
-      setNotice('Saved.');
-      // Reload so new lessons get their ids.
-      await load();
+
+      lastSaved.current = sent;
+      setError('');
+      if (!auto) setNotice('Saved.');
+
+      // New lessons now have an id: the next saves update them instead of creating them again.
+      const ids = payload.lessonIds || [];
+      const idByKey = new Map(lessonKeys.map((key, index) => [key, ids[index]] as const));
+      setSections((prev) =>
+        prev.map((section) => ({
+          ...section,
+          lessons: section.lessons.map((lesson) => (lesson.id || !idByKey.get(lesson.key) ? lesson : { ...lesson, id: idByKey.get(lesson.key) as string })),
+        })),
+      );
       return true;
     } catch {
-      setError('Network error. Please try again.');
+      if (auto) {
+        setError('Automatic saving did not work (no connection?). Your changes are still here, we will try again.');
+        window.setTimeout(() => setRetry((count) => count + 1), 8000);
+      } else {
+        setError('Network error. Please try again.');
+      }
       return false;
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
+  saveRef.current = save;
 
   async function submitForReview() {
     const session = getStoredAcademySession();
@@ -419,7 +516,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
     setError('');
     setNotice('');
     try {
-      if (!(await save())) return;
+      if (!(await save({ strict: true }))) return;
 
       const response = await fetch(`/api/academy/instructor/courses/${encodeURIComponent(courseId)}/submit`, {
         method: 'POST',
@@ -1369,7 +1466,7 @@ export function AcademyInstructorCourseEditor({ courseId }: { courseId: string }
         )}
 
         <p className={`hidden text-xs font-semibold md:block ${error ? 'text-[#c0264b]' : notice ? 'text-[#0f8a5f]' : 'text-[#8e879f]'}`}>
-          {error || notice || (editable ? (dirty ? 'You have unsaved changes.' : 'All changes saved.') : '')}
+          {error || notice || (editable ? (uploading ? 'Uploading... please keep this page open.' : saving ? 'Saving...' : dirty ? 'Saving in a moment...' : 'All changes are saved automatically.') : '')}
         </p>
 
         <div className="flex items-center gap-2">
